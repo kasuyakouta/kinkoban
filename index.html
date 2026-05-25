@@ -231,6 +231,7 @@ let state={
   showAssign:false,copied:false,nextId:11,
 };
 let longPressTimer=null,rerenderScheduled=false,memberSaveTimer=null;
+let lastRenderedMonth=''; // 月切替検知用
 
 function setState(patch,save){
   Object.assign(state,typeof patch==='function'?patch(state):patch);
@@ -611,11 +612,15 @@ function buildShiftTab(ds,mm,sm){
   const wrap=div({overflow:'hidden'});
   wrap.appendChild(buildTable(ds,mm,sm));
 
-  // 起動・月切替時にスクロール位置を左端にリセット
-  requestAnimationFrame(()=>{
-    const tw=document.getElementById('shift-table-wrap');
-    if(tw)tw.scrollLeft=0;
-  });
+  // 月が変わったときだけスクロール位置を左端にリセット
+  const monthKey=state.year+'-'+state.month;
+  if(monthKey!==lastRenderedMonth){
+    lastRenderedMonth=monthKey;
+    requestAnimationFrame(()=>{
+      const tw=document.getElementById('shift-table-wrap');
+      if(tw)tw.scrollLeft=0;
+    });
+  }
 
 
   return wrap;
