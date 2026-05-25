@@ -223,7 +223,7 @@ const today=new Date();
 let state={
   year:today.getFullYear(),month:today.getMonth()+1,
   data:{},members:DEFAULT_MEMBERS,
-  editMode:'view',showMembers:false,showSettings:false,
+  editMode:'view',showMembers:false,showSettings:false,activeAction:'view',showToday:false,
   tab:'shift',modal:null,personalMember:null,
   tempDuty:[],tempStatus:[],
   copyMode:false,copyStatus:null,copyDays:new Set(),
@@ -262,8 +262,107 @@ function buildCount(nd){const c={};mainMembers().forEach(m=>{c[m.name]=0;});days
 function adjDS(ds,delta){const d=new Date(ds);d.setDate(d.getDate()+delta);return d.toISOString().slice(0,10);}
 function buildPool(avail,nd,ds,count,opts){if(!avail.length)return[];return[...avail].sort((a,b)=>{let sa=0,sb=0;const pDS=adjDS(ds,-1);if(opts.consec){const aP=DUTY_COLS.some(dc=>getDutyArr(nd,pDS,dc.key).includes(a));const bP=DUTY_COLS.some(dc=>getDutyArr(nd,pDS,dc.key).includes(b));sa+=aP?-5:0;sb+=bP?-5:0;}if(opts.noConsec){const aP=DUTY_COLS.some(dc=>getDutyArr(nd,pDS,dc.key).includes(a));const bP=DUTY_COLS.some(dc=>getDutyArr(nd,pDS,dc.key).includes(b));sa+=aP?+10:0;sb+=bP?+10:0;}sa+=(count[a]||0);sb+=(count[b]||0);return sa-sb;});}
 function applyDuty(nd,ds,key,names){const dd={...(nd[ds]||{})};return{...nd,[ds]:syncDutyToMembers(dd,key,names,state.members)};}
-function runAutoAssign(nd,opts,skip){const count=buildCount(nd);days().forEach(d=>{const ds=toDS(d);const avail=availMain(ds);if(opts.pair){const sE=getDutyArr(nd,ds,'__safe__');const cE=getDutyArr(nd,ds,'__clean__');if(!sE.length&&!cE.length){const pool=buildPool(avail,nd,ds,count,opts);if(pool.length){const ch=pool[0];nd=applyDuty(nd,ds,'__safe__',[ch]);nd=applyDuty(nd,ds,'__clean__',[ch]);count[ch]=(count[ch]||0)+2;}}else if(sE.length&&!cE.length)nd=applyDuty(nd,ds,'__clean__',sE);else if(!sE.length&&cE.length)nd=applyDuty(nd,ds,'__safe__',cE);}DUTY_COLS.forEach(dc=>{if(dc.req&&!isReq(d))return;const ex=getDutyArr(nd,ds,dc.key);if(skip&&ex.length)return;if(opts.pair&&(dc.key==='__safe__'||dc.key==='__clean__')&&getDutyArr(nd,ds,dc.key).length)return;const pool=buildPool(avail,nd,ds,count,opts);if(!pool.length)return;const ch=pool[0];nd=applyDuty(nd,ds,dc.key,[ch]);count[ch]=(count[ch]||0)+1;});});return nd;}
-function autoAssignPreview(){let c=0;days().forEach(d=>{const ds=toDS(d);DUTY_COLS.forEach(dc=>{if(dc.req&&!isReq(d))return;if(!getDutyArr(state.data,ds,dc.key).length)c++;});});return c;}
+
+/**
+ * 自動振り分けロジック（改訂版）
+ * ルール:
+ *   土日祝 → 事務所番・金庫番・掃除を同一人物
+ *   平日   → 金庫番・掃除を同一人物（事務所番は不要）
+ * 返り値: { data: 更新後データ, alerts: 割り当て不可日リスト }
+ */
+function runAutoAssign(nd,opts,skip){
+  const count=buildCount(nd);
+  const alerts=[]; // 担当者不足の日
+
+  days().forEach(d=>{
+    const ds=toDS(d);
+    const wkEnd=isReq(d); // 土日祝
+    const avail=availMain(ds);
+
+    if(wkEnd){
+      // ── 土日祝：事務所番・金庫番・掃除を同一人物 ──
+      const offEx=getDutyArr(nd,ds,'__office__');
+      const safeEx=getDutyArr(nd,ds,'__safe__');
+      const cleanEx=getDutyArr(nd,ds,'__clean__');
+      const allSet=offEx.length&&safeEx.length&&cleanEx.length;
+      if(skip&&allSet)return; // スキップモードで全設定済みならパス
+
+      // 既に誰かが設定されていればその人を使う（優先順位: 事務所番>金庫番>掃除）
+      let chosen=offEx[0]||safeEx[0]||cleanEx[0]||null;
+      if(!chosen){
+        const pool=buildPool(avail,nd,ds,count,opts);
+        if(!pool.length){
+          alerts.push((d.getMonth()+1)+'/'+d.getDate()+'('+dayLbl(d)+') 土日祝');
+          return;
+        }
+        chosen=pool[0];
+      }
+      // 3列すべて同一人物に設定
+      nd=applyDuty(nd,ds,'__office__',[chosen]);
+      nd=applyDuty(nd,ds,'__safe__',[chosen]);
+      nd=applyDuty(nd,ds,'__clean__',[chosen]);
+      count[chosen]=(count[chosen]||0)+3;
+
+    } else {
+      // ── 平日：金庫番・掃除を同一人物（事務所番は不要）──
+      const safeEx=getDutyArr(nd,ds,'__safe__');
+      const cleanEx=getDutyArr(nd,ds,'__clean__');
+      const bothSet=safeEx.length&&cleanEx.length;
+      if(skip&&bothSet)return;
+
+      // 既に片方が設定されていればその人を使う
+      let chosen=safeEx[0]||cleanEx[0]||null;
+      if(!chosen){
+        const pool=buildPool(avail,nd,ds,count,opts);
+        if(!pool.length){
+          alerts.push((d.getMonth()+1)+'/'+d.getDate()+'('+dayLbl(d)+') 平日');
+          return;
+        }
+        chosen=pool[0];
+      }
+      nd=applyDuty(nd,ds,'__safe__',[chosen]);
+      nd=applyDuty(nd,ds,'__clean__',[chosen]);
+      count[chosen]=(count[chosen]||0)+2;
+    }
+  });
+
+  return {data:nd, alerts};
+}
+
+function showAssignAlerts(alerts){
+  if(!alerts||!alerts.length)return;
+  // ボトムシートでアラート表示
+  const{ov,sheet}=buildSheet(()=>ov.remove());
+  sheet.appendChild(div({fontFamily:'Georgia,serif',fontSize:'16px',fontWeight:'700',color:'#9b2335',marginBottom:'8px'},['⚠️ 担当者不足']));
+  sheet.appendChild(div({fontSize:'12px',color:'#8a6070',marginBottom:'14px'},['以下の日はメインメンバー全員が休みのため自動振り分けできませんでした。手動で設定してください。']));
+  const list=div({background:'#fde8e8',border:'1px solid #f5a0a0',borderRadius:'12px',padding:'12px 14px',marginBottom:'16px'});
+  alerts.forEach(a=>{
+    const row=div({display:'flex',alignItems:'center',gap:'8px',padding:'6px 0',borderBottom:'1px solid #f5a0a0'});
+    row.appendChild(div({fontSize:'13px',color:'#9b2335',fontWeight:'700'},['⚠ '+a]));
+    list.appendChild(row);
+  });
+  // 最後のborderBottomを消す
+  if(list.lastChild)list.lastChild.style.borderBottom='none';
+  sheet.appendChild(list);
+  sheet.appendChild(btn({width:'100%',background:'#f5f5f5',border:'none',color:'#8a6070',borderRadius:'12px',padding:'14px',fontSize:'13px',minHeight:'52px'},()=>ov.remove(),'閉じる'));
+  const appEl=document.getElementById('app');if(appEl)appEl.appendChild(ov);
+}
+
+function autoAssignPreview(){
+  let c=0;
+  days().forEach(d=>{
+    const ds=toDS(d);
+    const wkEnd=isReq(d);
+    if(wkEnd){
+      // 土日祝：3列すべて未設定なら1件としてカウント
+      if(!getDutyArr(state.data,ds,'__office__').length)c++;
+    } else {
+      // 平日：金庫番が未設定なら1件
+      if(!getDutyArr(state.data,ds,'__safe__').length)c++;
+    }
+  });
+  return c;
+}
 
 // DOM HELPERS
 function el(tag,attrs,children){const e=document.createElement(tag);if(attrs)Object.entries(attrs).forEach(([k,v])=>{if(k==='style'&&typeof v==='object')Object.assign(e.style,v);else if(k==='className')e.className=v;else if(k.startsWith('on'))e.addEventListener(k.slice(2).toLowerCase(),v);else e.setAttribute(k,v);});if(children)(Array.isArray(children)?children:[children]).forEach(c=>{if(c==null||c===false)return;e.appendChild(typeof c==='string'||typeof c==='number'?document.createTextNode(String(c)):c);});return e;}
@@ -278,7 +377,7 @@ function txt(t){return document.createTextNode(t);}
 function render(){const app=document.getElementById('app');app.innerHTML='';app.appendChild(buildApp());}
 
 function buildApp(){
-  const {tab,editMode,showMembers,showSettings,modal,showAssign}=state;
+  const {tab,editMode,showMembers,showSettings,activeAction,showToday,modal,showAssign}=state;
   const ds=days();const mm=mainMembers();const sm=subMembers();
   const misOfc=ds.filter(d=>isReq(d)&&!getDutyNames(toDS(d),'__office__').length).length;
   const misSafe=ds.filter(d=>!getDutyNames(toDS(d),'__safe__').length).length;
@@ -287,8 +386,9 @@ function buildApp(){
   root.appendChild(buildHeader(misOfc,misClean,misSafe));
   root.appendChild(el('div',{id:'save-indicator',style:{position:'fixed',top:'8px',left:'50%',transform:'translateX(-50%) translateY(-8px)',background:'rgba(46,125,94,0.92)',color:'#fff',borderRadius:'20px',padding:'5px 16px',fontSize:'12px',fontWeight:'700',zIndex:'999',pointerEvents:'none',opacity:'0',transition:'opacity 0.25s,transform 0.25s',boxShadow:'0 2px 8px rgba(0,0,0,0.18)',whiteSpace:'nowrap'}},['✓ 保存しました']));
   const content=div({flex:'1',paddingBottom:'68px',overflowY:'auto',WebkitOverflowScrolling:'touch'});
-  if(showMembers&&tab==='shift')content.appendChild(buildMemberEditor());
-  if(showSettings)content.appendChild(buildSettingsPanel());
+  if((showMembers||activeAction==='member')&&tab==='shift'&&!showToday)content.appendChild(buildMemberEditor());
+  if(showToday)content.appendChild(buildTodayDashboard());
+  else if(showSettings)content.appendChild(buildSettingsPanel());
   else if(tab==='shift')content.appendChild(buildShiftTab(ds,mm,sm));
   else if(tab==='summary')content.appendChild(buildSummaryTab(ds));
   else if(tab==='personal')content.appendChild(buildPersonalTab(ds));
@@ -301,31 +401,106 @@ function buildApp(){
 
 // ── HEADER
 function buildHeader(misOfc,misSafe,misClean){
-  const {tab,editMode,showMembers,showSettings,year,month}=state;
-  const hasWarn=tab==='shift'&&!showSettings&&(misOfc+misSafe+misClean>0);
-  const h=div({background:C.hBg,borderBottom:'1px solid '+C.hBorder,padding:'8px 12px',display:'flex',alignItems:'center',gap:'8px',position:'sticky',top:'0',zIndex:'100',boxShadow:'0 2px 8px rgba(194,80,110,0.10)',flexWrap:'wrap'});
-  h.appendChild(div({fontFamily:'Georgia,serif',fontSize:'18px',fontWeight:'700',color:C.accent,flexShrink:'0'},['🌸']));
-  if(!showSettings&&(tab==='shift'||tab==='summary'||tab==='personal')){
+  const {tab,editMode,showMembers,showSettings,activeAction,year,month}=state;
+  const isShift=tab==='shift';
+  const hasWarn=isShift&&!showSettings&&(misOfc+misSafe+misClean>0);
+
+  const h=div({background:C.hBg,borderBottom:'1px solid '+C.hBorder,
+    position:'sticky',top:'0',zIndex:'100',
+    boxShadow:'0 2px 8px rgba(194,80,110,0.10)'});
+
+  // ── 上段：ロゴ + 月ナビ ──
+  const top=div({padding:'8px 12px',display:'flex',alignItems:'center',gap:'8px'});
+  top.appendChild(div({fontFamily:'Georgia,serif',fontSize:'18px',fontWeight:'700',color:C.accent,flexShrink:'0'},['🌸']));
+
+  if(tab==='shift'||tab==='summary'||tab==='personal'){
     const nav=div({display:'flex',alignItems:'center',gap:'4px',flex:'1',justifyContent:'center'});
-    const navBtn=(lbl,cb)=>btn({background:'#fff',border:'1px solid '+C.aLight,color:C.accent,borderRadius:'8px',width:'40px',height:'40px',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'18px',fontWeight:'700',flexShrink:'0'},cb,lbl);
+    const navBtn=(lbl,cb)=>btn({background:'#fff',border:'1px solid '+C.aLight,color:C.accent,
+      borderRadius:'8px',width:'36px',height:'36px',display:'flex',alignItems:'center',
+      justifyContent:'center',fontSize:'16px',fontWeight:'700',flexShrink:'0'},cb,lbl);
     nav.appendChild(navBtn('◀',()=>{let m=state.month-1,y=state.year;if(m<1){m=12;y--;}setState({month:m,year:y});}));
-    const mbox=div({background:'#fff',border:'1px solid '+C.aLight,borderRadius:'8px',padding:'6px 12px',fontWeight:'700',fontSize:'14px',color:C.accent,textAlign:'center',minWidth:'108px'});
+    const mbox=div({background:'#fff',border:'1px solid '+C.aLight,borderRadius:'8px',
+      padding:'5px 10px',fontWeight:'700',fontSize:'14px',color:C.accent,textAlign:'center',minWidth:'100px'});
     mbox.appendChild(txt(year+'年'+month+'月'));
     nav.appendChild(mbox);
     nav.appendChild(navBtn('▶',()=>{let m=state.month+1,y=state.year;if(m>12){m=1;y++;}setState({month:m,year:y});}));
-    h.appendChild(nav);
+    top.appendChild(nav);
   }
-  const acts=div({display:'flex',gap:'6px',flexShrink:'0',marginLeft:'auto'});
-  if(!showSettings&&tab==='shift'){
-    const isEdit=editMode==='edit';
-    acts.appendChild(btn({background:isEdit?C.accent:'#fff',color:isEdit?'#fff':C.accent,border:'1px solid '+(isEdit?C.accent:C.aLight),borderRadius:'8px',padding:'8px 12px',fontSize:'13px',fontWeight:'700',minHeight:'40px'},()=>setState({editMode:isEdit?'view':'edit'}),isEdit?'✏️ 編集中':'👁 閲覧'));
-    acts.appendChild(btn({background:showMembers?'#7a5080':'#fff',color:showMembers?'#fff':'#7a5080',border:'1px solid '+(showMembers?'#7a5080':'#d4b8dc'),borderRadius:'8px',padding:'8px 12px',fontSize:'18px',minHeight:'40px'},()=>setState({showMembers:!showMembers}),'👥'));
-    if(isEdit)acts.appendChild(btn({background:'linear-gradient(135deg,#c2506e,#7a5080)',color:'#fff',border:'none',borderRadius:'8px',padding:'8px 12px',fontSize:'18px',fontWeight:'700',minHeight:'40px'},()=>setState({showAssign:true}),'✨'));
+  h.appendChild(top);
+
+  // ── 下段：アクションタブ（シフトタブのみ表示）──
+  if(isShift){
+    const actionTabs=[
+      {key:'view',  label:'👁 閲覧'},
+      {key:'edit',  label:'✏️ 編集'},
+      {key:'assign',label:'✨ 振り分け'},
+      {key:'member',label:'👥 メンバー'},
+      {key:'reset', label:'🗑 リセット'},
+      {key:'sync',  label:'📥 同期'},
+      {key:'settings',label:'⚙️ 設定'},
+    ];
+    const tabBar=div({
+      display:'flex',gap:'0',
+      borderTop:'1px solid '+C.hBorder,
+      overflowX:'auto',WebkitOverflowScrolling:'touch',
+      scrollbarWidth:'none',
+    });
+    tabBar.style.cssText+=':-webkit-scrollbar{display:none}';
+
+    actionTabs.forEach(({key,label})=>{
+      const isActive=(key==='view'&&editMode==='view'&&!showMembers&&!showSettings&&activeAction==='view')
+        ||(key==='edit'&&editMode==='edit'&&activeAction==='edit')
+        ||(key==='member'&&showMembers)
+        ||(key==='settings'&&showSettings)
+        ||(key==='assign'&&activeAction==='assign')
+        ||(key==='reset'&&activeAction==='reset')
+        ||(key==='sync'&&activeAction==='sync');
+
+      const b=btn({
+        padding:'8px 10px',fontSize:'12px',fontWeight:isActive?'700':'500',
+        color:isActive?C.accent:C.sub,background:isActive?C.mainBg:'transparent',
+        borderBottom:isActive?'2px solid '+C.accent:'2px solid transparent',
+        whiteSpace:'nowrap',flexShrink:'0',
+        transition:'color 0.15s,border-color 0.15s',
+      },()=>{
+        if(key==='view'){setState({editMode:'view',showMembers:false,showSettings:false,activeAction:'view'});}
+        else if(key==='edit'){setState({editMode:'edit',showMembers:false,showSettings:false,activeAction:'edit'});}
+        else if(key==='assign'){setState({editMode:'edit',showMembers:false,showSettings:false,activeAction:'assign',showAssign:true});}
+        else if(key==='member'){setState({showMembers:!showMembers,showSettings:false,activeAction:showMembers?'view':'member'});}
+        else if(key==='reset'){
+          setState({activeAction:'reset'});
+          // リセット確認
+          if(confirm('担当欄（事務所番・金庫番・掃除）をすべてクリアしますか？')){
+            const nd={...state.data};
+            days().forEach(d=>{const ds=toDS(d);if(!nd[ds])return;const dd={...(nd[ds])};
+              DUTY_COLS.forEach(dc=>{const lbl=DUTY_STATUS_MAP[dc.key];dd[dc.key]=[];
+                state.members.forEach(({name})=>{const p=Array.isArray(dd[name])?dd[name]:(dd[name]?[dd[name]]:[]);if(p.includes(lbl))dd[name]=p.filter(s=>s!==lbl);});});nd[ds]=dd;});
+            setState({data:nd,activeAction:'edit'},true);
+          } else { setState({activeAction:editMode==='edit'?'edit':'view'}); }
+        }
+        else if(key==='sync'){
+          setState({activeAction:'sync'});
+          if(GAS_URL){
+            setSaveStatus('saving');
+            gasLoad().then(data=>{
+              if(data.shiftData)state.data=data.shiftData;
+              if(Array.isArray(data.members)&&data.members.length>0)state.members=data.members;
+              setState({activeAction:editMode==='edit'?'edit':'view'});setSaveStatus('saved');
+            }).catch(()=>{setSaveStatus('error');setState({activeAction:editMode==='edit'?'edit':'view'});});
+          } else { alert('GASのURLが設定されていません。⚙️設定からURLを入力してください。');setState({activeAction:'view'}); }
+        }
+        else if(key==='settings'){setState({showSettings:!showSettings,showMembers:false,activeAction:showSettings?'view':'settings'});}
+      },label);
+      tabBar.appendChild(b);
+    });
+    h.appendChild(tabBar);
   }
-  acts.appendChild(btn({background:showSettings?C.accent:'#fff',color:showSettings?'#fff':C.accent,border:'1px solid '+(showSettings?C.accent:C.aLight),borderRadius:'8px',padding:'8px 12px',fontSize:'16px',minHeight:'40px'},()=>setState({showSettings:!showSettings,showMembers:false}),'⚙️'));
-  h.appendChild(acts);
+
+  // ── 警告バー ──
   if(hasWarn){
-    const wb=div({background:C.warnBg,border:'1px solid '+C.warnBorder,borderRadius:'8px',padding:'6px 12px',color:C.warnText,fontSize:'12px',fontWeight:'700',display:'flex',gap:'12px',width:'100%',alignItems:'center',flexWrap:'wrap'});
+    const wb=div({background:C.warnBg,border:'1px solid '+C.warnBorder,
+      padding:'6px 12px',color:C.warnText,fontSize:'12px',fontWeight:'700',
+      display:'flex',gap:'12px',alignItems:'center',flexWrap:'wrap'});
     if(misOfc>0)wb.appendChild(txt('⚠ 事務所番 '+misOfc+'日'));
     if(misSafe>0)wb.appendChild(txt('⚠ 金庫番 '+misSafe+'日'));
     if(misClean>0)wb.appendChild(txt('⚠ 掃除 '+misClean+'日'));
@@ -374,24 +549,23 @@ function buildSettingsPanel(){
 
 // ── BOTTOM NAV
 function buildBottomNav(){
-  const {tab,showSettings}=state;
+  const {tab,showSettings,showToday}=state;
   const nav=div({position:'fixed',bottom:'0',left:'0',right:'0',background:'#fff',borderTop:'1px solid '+C.border,display:'flex',zIndex:'90',paddingBottom:'env(safe-area-inset-bottom,0px)',boxShadow:'0 -2px 12px rgba(194,80,110,0.08)'});
+
+  // 今日タブ
+  const todayActive=showToday;
+  const todayBtn=btn({flex:'1',padding:'10px 4px 8px',display:'flex',flexDirection:'column',alignItems:'center',gap:'2px',background:todayActive?'#fff8e8':'transparent',borderTop:todayActive?'2px solid #f7a800':'2px solid transparent'},()=>setState({showToday:!showToday,showSettings:false,showMembers:false}));
+  todayBtn.appendChild(div({fontSize:'22px',lineHeight:'1'},['📅']));
+  todayBtn.appendChild(div({fontSize:'10px',fontWeight:todayActive?'700':'400',color:todayActive?'#f7a800':C.muted},['今日']));
+  nav.appendChild(todayBtn);
+
   [{t:'shift',icon:'📋',lbl:'シフト'},{t:'summary',icon:'📊',lbl:'サマリー'},{t:'personal',icon:'👤',lbl:'個人'}].forEach(({t,icon,lbl})=>{
-    const active=tab===t&&!showSettings;
-    const b=btn({flex:'1',padding:'10px 4px 8px',display:'flex',flexDirection:'column',alignItems:'center',gap:'2px',background:active?C.mainBg:'transparent',borderTop:active?'2px solid '+C.accent:'2px solid transparent'},()=>setState({tab:t,showSettings:false,showMembers:false}));
+    const active=tab===t&&!showSettings&&!showToday;
+    const b=btn({flex:'1',padding:'10px 4px 8px',display:'flex',flexDirection:'column',alignItems:'center',gap:'2px',background:active?C.mainBg:'transparent',borderTop:active?'2px solid '+C.accent:'2px solid transparent'},()=>setState({tab:t,showSettings:false,showMembers:false,showToday:false}));
     b.appendChild(div({fontSize:'22px',lineHeight:'1'},[icon]));
     b.appendChild(div({fontSize:'10px',fontWeight:active?'700':'400',color:active?C.accent:C.muted},[lbl]));
     nav.appendChild(b);
   });
-  // 同期ボタン
-  const syncBtn=btn({flex:'1',padding:'10px 4px 8px',display:'flex',flexDirection:'column',alignItems:'center',gap:'2px',background:'transparent',borderTop:'2px solid transparent'},async()=>{
-    if(!GAS_URL)return;
-    setSaveStatus('saving');
-    try{const data=await gasLoad();if(data.shiftData)state.data=data.shiftData;if(Array.isArray(data.members)&&data.members.length>0)state.members=data.members;setState({});setSaveStatus('saved');}catch(e){setSaveStatus('error');}
-  });
-  syncBtn.appendChild(div({fontSize:'22px',lineHeight:'1'},[GAS_URL?'☁️':'💾']));
-  syncBtn.appendChild(div({fontSize:'10px',color:GAS_URL?'#2e7d5e':C.muted},[GAS_URL?'同期':'ローカル']));
-  nav.appendChild(syncBtn);
   return nav;
 }
 
@@ -433,11 +607,33 @@ function buildMemberEditor(){
 }
 
 // ── SHIFT TABLE
-function buildShiftTab(ds,mm,sm){const wrap=div({overflow:'hidden'});wrap.appendChild(buildTable(ds,mm,sm));return wrap;}
+function buildShiftTab(ds,mm,sm){
+  const wrap=div({overflow:'hidden'});
+  wrap.appendChild(buildTable(ds,mm,sm));
+
+  // 起動・月切替時にスクロール位置を左端にリセット
+  requestAnimationFrame(()=>{
+    const tw=document.getElementById('shift-table-wrap');
+    if(tw)tw.scrollLeft=0;
+  });
+
+  // スワイプで月切替
+  let swipeStartX=0,swipeStartY=0;
+  wrap.addEventListener('touchstart',e=>{swipeStartX=e.touches[0].clientX;swipeStartY=e.touches[0].clientY;},{passive:true});
+  wrap.addEventListener('touchend',e=>{
+    const dx=e.changedTouches[0].clientX-swipeStartX;
+    const dy=e.changedTouches[0].clientY-swipeStartY;
+    if(Math.abs(dx)>60&&Math.abs(dx)>Math.abs(dy)*1.5){
+      if(dx<0){let m=state.month+1,y=state.year;if(m>12){m=1;y++;}setState({month:m,year:y});}
+      else{let m=state.month-1,y=state.year;if(m<1){m=12;y--;}setState({month:m,year:y});}
+    }
+  },{passive:true});
+  return wrap;
+}
 
 function buildTable(ds,mm,sm){
-  const {editMode}=state;const W={date:42,day:26,duty:76,sep:2,member:52};
-  const wrap=div({overflowX:'auto',overflowY:'visible',WebkitOverflowScrolling:'touch',padding:'0 0 16px 0'});
+  const {editMode}=state;const W={date:54,day:28,duty:96,sep:2,member:52};
+  const wrap=div({overflowX:'auto',overflowY:'visible',WebkitOverflowScrolling:'touch',padding:'0 0 16px 0'});wrap.id='shift-table-wrap';
   const tbl=el('table',{style:{borderCollapse:'separate',borderSpacing:'0',tableLayout:'fixed',minWidth:(W.date+W.day+DUTY_COLS.length*W.duty+W.sep+mm.length*W.member+(sm.length?(W.sep+sm.length*W.member):0))+'px'}});
   const cg=el('colgroup');
   [{w:W.date},{w:W.day},...DUTY_COLS.map(()=>({w:W.duty})),{w:W.sep},...mm.map(()=>({w:W.member})),...(sm.length?[{w:W.sep}]:[]),...sm.map(()=>({w:W.member}))].forEach(({w})=>{const c=el('col');c.style.width=w+'px';cg.appendChild(c);});
@@ -517,8 +713,8 @@ function buildAssignModal(){
   sheet.appendChild(optRow('② 担当が連日になるように','前日担当者を優先','consec','#2e7d5e','#e0f5ec','#6abf99',assignOpts.noConsec));
   sheet.appendChild(optRow('③ 担当が連日にならないように','前日担当者を避ける','noConsec','#1a5276','#d6eaf8','#7fb3d3',assignOpts.consec));
   sheet.appendChild(div({borderTop:'1px solid '+C.border,margin:'8px 0 14px'}));
-  [{label:'⑤ 未設定欄だけ振り分け'+(prev>0?' ('+prev+'件)':''),bg:'linear-gradient(135deg,'+C.accent+',#7a5080)',color:'#fff',border:'none',action:()=>{const d=runAutoAssign({...state.data},state.assignOpts,true);setState({data:d,showAssign:false},true);}},
-   {label:'全体を再振り分け（上書き）',bg:'#fff',color:C.accent,border:'2px solid '+C.accent,action:()=>{const d=runAutoAssign({...state.data},state.assignOpts,false);setState({data:d,showAssign:false},true);}},
+  [{label:'⑤ 未設定欄だけ振り分け'+(prev>0?' ('+prev+'件)':''),bg:'linear-gradient(135deg,'+C.accent+',#7a5080)',color:'#fff',border:'none',action:()=>{const r=runAutoAssign({...state.data},state.assignOpts,true);setState({data:r.data,showAssign:false},true);showAssignAlerts(r.alerts);}},
+   {label:'全体を再振り分け（上書き）',bg:'#fff',color:C.accent,border:'2px solid '+C.accent,action:()=>{const r=runAutoAssign({...state.data},state.assignOpts,false);setState({data:r.data,showAssign:false},true);showAssignAlerts(r.alerts);}},
    {label:'④ リセット（担当欄をすべてクリア）',bg:'#fff',color:C.warnText,border:'1px solid '+C.warnBorder,action:()=>{const nd={...state.data};days().forEach(d=>{const ds=toDS(d);if(!nd[ds])return;const dd={...(nd[ds])};DUTY_COLS.forEach(dc=>{const label=DUTY_STATUS_MAP[dc.key];dd[dc.key]=[];state.members.forEach(({name})=>{const p=Array.isArray(dd[name])?dd[name]:(dd[name]?[dd[name]]:[]);if(p.includes(label))dd[name]=p.filter(s=>s!==label);});});nd[ds]=dd;});setState({data:nd,showAssign:false},true);}}
   ].forEach(({label,bg,color,border,action})=>{sheet.appendChild(btn({width:'100%',marginBottom:'8px',background:bg,color,border:border||'none',borderRadius:'12px',padding:'16px',fontSize:'14px',fontWeight:'700',minHeight:'56px'},action,label));});
   sheet.appendChild(btn({width:'100%',background:'#f5f5f5',border:'none',color:C.sub,borderRadius:'12px',padding:'14px',fontSize:'13px',minHeight:'52px'},()=>setState({showAssign:false}),'キャンセル'));
@@ -602,11 +798,203 @@ function buildCopyModeContent(){
   wrap.appendChild(row);return wrap;
 }
 
+
+// ============================================================
+// 📅 今日のダッシュボード
+// ============================================================
+function buildTodayDashboard(){
+  const wrap=div({padding:'16px 14px 80px',maxWidth:'500px',margin:'0 auto'});
+  const todayDate=new Date();
+  const ds=TODAY_DS;
+  const w=todayDate.getDay();
+  const isWH=isWk(todayDate)||isHol(todayDate);
+  const dc=dayClr(todayDate);
+
+  // ── 日付ヘッダー ──
+  const dateHdr=div({background:'linear-gradient(135deg,#c2506e,#7a5080)',borderRadius:'16px',padding:'20px',marginBottom:'16px',color:'#fff',textAlign:'center'});
+  dateHdr.appendChild(div({fontSize:'13px',opacity:'0.85',marginBottom:'4px'},['今日の担当']));
+  dateHdr.appendChild(div({fontSize:'28px',fontWeight:'700',marginBottom:'4px'},
+    [(todayDate.getMonth()+1)+'月'+todayDate.getDate()+'日（'+dayLbl(todayDate)+'）'+(isHol(todayDate)?'祝':'')+' ']));
+  dateHdr.appendChild(div({fontSize:'13px',opacity:'0.8'},[isWH?'🔴 土日祝':'🟢 平日']));
+  wrap.appendChild(dateHdr);
+
+  // ── 担当者カード ──
+  const dutyToShow=isWH
+    ? DUTY_COLS // 土日祝は全列
+    : DUTY_COLS.filter(dc=>dc.key!=='__office__'); // 平日は金庫番・掃除のみ
+
+  const hasDuty=dutyToShow.some(dc=>getDutyNames(ds,dc.key).length>0);
+
+  if(!hasDuty){
+    wrap.appendChild(div({background:'#fff',border:'1px solid '+C.border,borderRadius:'14px',padding:'24px',textAlign:'center',color:C.muted,fontSize:'14px'},['本日の担当はまだ設定されていません']));
+  } else {
+    dutyToShow.forEach(dc2=>{
+      const names=getDutyNames(ds,dc2.key);
+      if(!names.length)return;
+      const card=div({background:'#fff',border:'2px solid '+dc2.accent,borderRadius:'14px',padding:'14px 16px',marginBottom:'10px',display:'flex',alignItems:'center',gap:'12px'});
+      const badge=div({background:dc2.lightBg,color:dc2.accent,borderRadius:'8px',padding:'6px 10px',fontWeight:'700',fontSize:'12px',flexShrink:'0',textAlign:'center',minWidth:'64px'});
+      badge.appendChild(txt(dc2.label));
+      card.appendChild(badge);
+      const nameWrap=div({display:'flex',flexWrap:'wrap',gap:'6px',flex:'1'});
+      names.forEach(n=>{
+        const nb=div({background:dc2.accent,color:'#fff',borderRadius:'20px',padding:'6px 14px',fontSize:'14px',fontWeight:'700'});
+        nb.appendChild(txt(n));nameWrap.appendChild(nb);
+      });
+      card.appendChild(nameWrap);
+      wrap.appendChild(card);
+    });
+  }
+
+  // ── メンバーの状態 ──
+  wrap.appendChild(div({fontWeight:'700',fontSize:'13px',color:C.text,margin:'16px 0 8px'},['👥 本日のメンバー状態']));
+  const memGrid=div({display:'grid',gridTemplateColumns:'1fr 1fr',gap:'8px'});
+  state.members.forEach(m=>{
+    const sts=getStatuses(ds,m.name).filter(s=>!['事務所番','金庫番','掃除'].includes(s));
+    const isDuty=DUTY_COLS.some(dc2=>getDutyNames(ds,dc2.key).includes(m.name));
+    const card=div({background:'#fff',border:'1px solid '+C.border,borderRadius:'10px',padding:'10px 12px',display:'flex',alignItems:'center',gap:'8px'});
+    const dot=div({width:'8px',height:'8px',borderRadius:'50%',flexShrink:'0',
+      background:sts.some(s=>['公休','有休','午前半休','午後半休'].includes(s))?'#f1948a':isDuty?'#c2506e':'#6abf99'});
+    card.appendChild(dot);
+    card.appendChild(div({fontWeight:'600',fontSize:'13px',flex:'1'},[m.name]));
+    if(sts.length){
+      const ss=STATUS_STYLE[sts[0]];
+      card.appendChild(div({background:ss?.bg,color:ss?.text,fontSize:'10px',fontWeight:'700',borderRadius:'4px',padding:'2px 6px',border:'1px solid '+(ss?.border||C.border)},[sts[0]]));
+    } else if(isDuty){
+      const dcName=DUTY_COLS.find(dc2=>getDutyNames(ds,dc2.key).includes(m.name));
+      if(dcName)card.appendChild(div({background:dcName.lightBg,color:dcName.accent,fontSize:'10px',fontWeight:'700',borderRadius:'4px',padding:'2px 6px'},[dcName.label]));
+    }
+    memGrid.appendChild(card);
+  });
+  wrap.appendChild(memGrid);
+
+  // ── 前月データコピーボタン ──
+  wrap.appendChild(div({fontWeight:'700',fontSize:'13px',color:C.text,margin:'20px 0 8px'},['📋 前月データのコピー']));
+  const prevM=state.month===1?12:state.month-1;
+  const prevY=state.month===1?state.year-1:state.year;
+  const copyCard=div({background:'#fff',border:'1px solid '+C.border,borderRadius:'12px',padding:'14px'});
+  copyCard.appendChild(div({fontSize:'12px',color:C.muted,marginBottom:'10px'},[prevY+'年'+prevM+'月の休暇設定（公休・有休・半休）を'+state.year+'年'+state.month+'月にコピーします']));
+  copyCard.appendChild(btn({width:'100%',background:C.accent,color:'#fff',border:'none',borderRadius:'10px',padding:'12px',fontSize:'13px',fontWeight:'700'},()=>copyPrevMonthData(),'📋 前月の休暇設定をコピー'));
+  wrap.appendChild(copyCard);
+
+  return wrap;
+}
+
+// ============================================================
+// 📋 前月データコピー
+// ============================================================
+function copyPrevMonthData(){
+  const prevM=state.month===1?12:state.month-1;
+  const prevY=state.month===1?state.year-1:state.year;
+  const prevDays=getMonthDays(prevY,prevM);
+  const currDays=getMonthDays(state.year,state.month);
+  const LEAVE_STS=['公休','有休','午前半休','午後半休'];
+
+  // 前月の日付→曜日マップ
+  const prevByDow={};
+  prevDays.forEach(d=>{
+    const key=d.getDay()+'_'+d.getDate();
+    const ds=toDS(d);
+    state.members.forEach(m=>{
+      const sts=(state.data[ds]?.[m.name]||[]).filter(s=>LEAVE_STS.includes(s));
+      if(sts.length){
+        if(!prevByDow[m.name])prevByDow[m.name]=[];
+        prevByDow[m.name].push({dow:d.getDay(),date:d.getDate(),sts});
+      }
+    });
+  });
+
+  // 同じ曜日・日付に近いものをコピー（単純に同じ週番号・曜日でマッチング）
+  const nd={...state.data};
+  let copied=0;
+  currDays.forEach(d=>{
+    const ds=toDS(d);
+    state.members.forEach(m=>{
+      if(!prevByDow[m.name])return;
+      // 同じ曜日で同じ週(1-5)のエントリを探す
+      const week=Math.ceil(d.getDate()/7);
+      const match=prevByDow[m.name].find(p=>p.dow===d.getDay()&&Math.ceil(p.date/7)===week);
+      if(match){
+        const dd={...(nd[ds]||{})};
+        const cur=Array.isArray(dd[m.name])?dd[m.name]:(dd[m.name]?[dd[m.name]]:[]);
+        const newSts=[...new Set([...cur,...match.sts])];
+        nd[ds]=syncMemberToDuty({...dd,[m.name]:newSts},m.name,newSts);
+        copied++;
+      }
+    });
+  });
+
+  setState({data:nd},true);
+  alert('✅ 前月の休暇設定をコピーしました！\n'+copied+'件の設定を引き継ぎました。\nシフトタブで確認してください。');
+}
+
+
+// ============================================================
+// 📊 担当回数の偏り表示
+// ============================================================
+function buildDutyBalanceChart(ds){
+  const mm=mainMembers();
+  if(!mm.length)return div({});
+
+  // 各メンバーの担当回数を集計
+  const counts={};
+  mm.forEach(m=>{counts[m.name]=0;});
+  ds.forEach(d=>{
+    const dstr=toDS(d);
+    DUTY_COLS.forEach(dc=>{
+      getDutyNames(dstr,dc.key).forEach(n=>{if(counts[n]!==undefined)counts[n]++;});
+    });
+  });
+
+  const entries=Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+  const maxCount=Math.max(...entries.map(([,v])=>v),1);
+  const totalCount=entries.reduce((s,[,v])=>s+v,0);
+  const avg=totalCount/mm.length;
+
+  const section=div({background:'#fff',border:'1px solid '+C.border,borderRadius:'14px',padding:'14px',marginBottom:'20px'});
+  const hdr=div({display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'12px'});
+  hdr.appendChild(div({fontWeight:'700',fontSize:'14px',color:C.accent},['📊 担当回数の偏り']));
+  hdr.appendChild(div({fontSize:'11px',color:C.muted},['平均 '+avg.toFixed(1)+'回']));
+  section.appendChild(hdr);
+
+  entries.forEach(([name,count])=>{
+    const ratio=count/maxCount;
+    const diff=count-avg;
+    const barColor=diff>1.5?'#e88fa8':diff<-1.5?'#7fb3d3':'#6abf99';
+    const row=div({marginBottom:'10px'});
+    const labelRow=div({display:'flex',justifyContent:'space-between',marginBottom:'4px',alignItems:'center'});
+    labelRow.appendChild(div({fontSize:'12px',fontWeight:'600',color:C.text},[name]));
+    const countDiv=div({display:'flex',alignItems:'center',gap:'6px'});
+    countDiv.appendChild(div({fontSize:'13px',fontWeight:'700',color:barColor},[count+'回']));
+    if(Math.abs(diff)>0.5){
+      countDiv.appendChild(div({fontSize:'10px',color:barColor,background:barColor+'22',borderRadius:'4px',padding:'1px 5px',fontWeight:'700'},[diff>0?'+'+diff.toFixed(1):diff.toFixed(1)]));
+    }
+    labelRow.appendChild(countDiv);
+    row.appendChild(labelRow);
+    const barBg=div({background:'#f0f0f0',borderRadius:'4px',height:'8px',overflow:'hidden'});
+    const bar=div({background:barColor,borderRadius:'4px',height:'8px',width:(ratio*100)+'%',transition:'width 0.4s ease'});
+    barBg.appendChild(bar);row.appendChild(barBg);
+    section.appendChild(row);
+  });
+
+  // 凡例
+  const legend=div({display:'flex',gap:'12px',marginTop:'12px',flexWrap:'wrap'});
+  [{color:'#e88fa8',label:'多い(+1.5以上)'},{color:'#6abf99',label:'均等'},{color:'#7fb3d3',label:'少ない(-1.5以下)'}].forEach(({color,label})=>{
+    const l=div({display:'flex',alignItems:'center',gap:'4px',fontSize:'10px',color:C.muted});
+    l.appendChild(div({width:'10px',height:'10px',borderRadius:'2px',background:color,flexShrink:'0'}));
+    l.appendChild(txt(label));legend.appendChild(l);
+  });
+  section.appendChild(legend);
+  return section;
+}
+
 // ── SUMMARY TAB
 function buildSummaryTab(ds){
   const wrap=div({padding:'12px 12px 40px',maxWidth:'700px',margin:'0 auto'});
   wrap.appendChild(div({fontFamily:'Georgia,serif',fontSize:'16px',fontWeight:'700',color:C.accent,marginBottom:'4px'},['📊 担当一覧サマリー']));
   wrap.appendChild(div({fontSize:'12px',color:C.muted,marginBottom:'16px'},['月の全担当をまとめて確認できます']));
+
+  // ── 担当回数の偏り表示 ──
+  wrap.appendChild(buildDutyBalanceChart(ds));
   DUTY_COLS.forEach(dc=>{
     const section=div({marginBottom:'20px'});
     const sh=div({background:dc.lightBg,border:'1px solid '+dc.accent,borderRadius:'10px 10px 0 0',padding:'10px 14px',display:'flex',alignItems:'center',gap:'8px'});
@@ -695,7 +1083,7 @@ function initApp(loaded){
   state.data=loaded.shiftData||{};
   if(Array.isArray(loaded.members)&&loaded.members.length>0){
     state.members=loaded.members;
-    state.nextId=Math.max(...state.members.map(m=>m.id||0))+1;
+    state.nextId=state.members.length>0?Math.max(...state.members.map(m=>m.id||0))+1:11;
   }
   document.getElementById('loading').style.display='none';
   document.getElementById('setup').classList.remove('show');
