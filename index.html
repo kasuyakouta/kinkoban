@@ -1074,8 +1074,28 @@ function buildPersonalTab(ds){
 // ============================================================
 // 起動
 // ============================================================
+// 過去3ヶ月より古いデータを削除する
+function pruneOldData(data){
+  const cutoff=new Date();
+  cutoff.setDate(cutoff.getDate()-90); // 90日前
+  const cutoffDS=cutoff.toISOString().slice(0,10);
+  let pruned=false;
+  Object.keys(data).forEach(ds=>{
+    if(ds<cutoffDS){
+      delete data[ds];
+      pruned=true;
+    }
+  });
+  return{data,pruned};
+}
+
 function initApp(loaded){
-  state.data=loaded.shiftData||{};
+  const raw=loaded.shiftData||{};
+
+  // 起動時に古いデータを自動削除
+  const{data,pruned}=pruneOldData(raw);
+  state.data=data;
+
   if(Array.isArray(loaded.members)&&loaded.members.length>0){
     state.members=loaded.members;
     state.nextId=state.members.length>0?Math.max(...state.members.map(m=>m.id||0))+1:11;
@@ -1083,6 +1103,10 @@ function initApp(loaded){
   document.getElementById('loading').style.display='none';
   document.getElementById('setup').classList.remove('show');
   document.getElementById('app').style.display='block';
+
+  // 削除があった場合は自動保存
+  if(pruned)scheduleSave();
+
   render();
 }
 
