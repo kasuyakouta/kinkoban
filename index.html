@@ -617,17 +617,7 @@ function buildShiftTab(ds,mm,sm){
     if(tw)tw.scrollLeft=0;
   });
 
-  // スワイプで月切替
-  let swipeStartX=0,swipeStartY=0;
-  wrap.addEventListener('touchstart',e=>{swipeStartX=e.touches[0].clientX;swipeStartY=e.touches[0].clientY;},{passive:true});
-  wrap.addEventListener('touchend',e=>{
-    const dx=e.changedTouches[0].clientX-swipeStartX;
-    const dy=e.changedTouches[0].clientY-swipeStartY;
-    if(Math.abs(dx)>60&&Math.abs(dx)>Math.abs(dy)*1.5){
-      if(dx<0){let m=state.month+1,y=state.year;if(m>12){m=1;y++;}setState({month:m,year:y});}
-      else{let m=state.month-1,y=state.year;if(m<1){m=12;y--;}setState({month:m,year:y});}
-    }
-  },{passive:true});
+
   return wrap;
 }
 
