@@ -240,7 +240,7 @@ const today=new Date();
 let state={
   year:today.getFullYear(),month:today.getMonth()+1,
   data:{},members:DEFAULT_MEMBERS,
-  editMode:'view',showMembers:false,showSettings:false,activeAction:'view',showToday:false,swapMode:false,swapDayA:null,swapDayB:null,
+  editMode:'view',showMembers:false,showSettings:false,activeAction:'view',showToday:false,swapMode:false,swapDayA:null,swapDayB:null,showResetModal:false,
   tab:'shift',modal:null,personalMember:null,
   tempDuty:[],tempStatus:[],
   copyMode:false,copyStatus:null,copyDays:new Set(),
@@ -414,6 +414,7 @@ function buildApp(){
   root.appendChild(content);
   root.appendChild(buildBottomNav());
   if(showAssign)root.appendChild(buildAssignModal());
+  if(state.showResetModal)root.appendChild(buildResetModal());
   if(modal)root.appendChild(buildModal());
   return root;
 }
@@ -489,15 +490,7 @@ function buildHeader(misOfc,misSafe,misClean){
         else if(key==='assign'){setState({editMode:'edit',showMembers:false,showSettings:false,activeAction:'assign',showAssign:true});}
         else if(key==='member'){setState({showMembers:!showMembers,showSettings:false,activeAction:showMembers?'view':'member'});}
         else if(key==='reset'){
-          setState({activeAction:'reset'});
-          // リセット確認
-          if(confirm('担当欄（事務所番・金庫番・掃除）をすべてクリアしますか？')){
-            const nd={...state.data};
-            days().forEach(d=>{const ds=toDS(d);if(!nd[ds])return;const dd={...(nd[ds])};
-              DUTY_COLS.forEach(dc=>{const lbl=DUTY_STATUS_MAP[dc.key];dd[dc.key]=[];
-                state.members.forEach(({name})=>{const p=Array.isArray(dd[name])?dd[name]:(dd[name]?[dd[name]]:[]);if(p.includes(lbl))dd[name]=p.filter(s=>s!==lbl);});});nd[ds]=dd;});
-            setState({data:nd,activeAction:'edit'},true);
-          } else { setState({activeAction:editMode==='edit'?'edit':'view'}); }
+          setState({activeAction:'reset',showResetModal:true});
         }
         else if(key==='sync'){
           setState({activeAction:'sync'});
@@ -731,6 +724,134 @@ function buildSheet(onClose){
   sheet.addEventListener('click',e=>e.stopPropagation());
   sheet.appendChild(div({width:'40px',height:'4px',background:C.border,borderRadius:'2px',margin:'12px auto 16px'}));
   ov.appendChild(sheet);return{ov,sheet};
+}
+
+
+// ============================================================
+// 🗑 リセットモーダル（担当 or スケジュール）
+// ============================================================
+function buildResetModal(){
+  const{ov,sheet}=buildSheet(()=>setState({showResetModal:false,activeAction:'edit'}));
+
+  sheet.appendChild(div({fontFamily:'Georgia,serif',fontSize:'16px',fontWeight:'700',
+    color:C.accent,marginBottom:'4px'},['🗑 リセット']));
+  sheet.appendChild(div({fontSize:'12px',color:C.muted,marginBottom:'16px'},
+    [state.year+'年'+state.month+'月分のデータを選択してクリアします']));
+
+  // ── 担当リセット ──
+  const dutyCard=div({background:'#fde8e8',border:'1px solid '+C.warnBorder,
+    borderRadius:'14px',padding:'14px 16px',marginBottom:'12px'});
+  dutyCard.appendChild(div({fontWeight:'700',fontSize:'14px',color:C.warnText,
+    marginBottom:'6px'},['🗑 担当欄リセット']));
+  dutyCard.appendChild(div({fontSize:'12px',color:C.warnText,marginBottom:'12px',lineHeight:'1.6'},
+    ['事務所番・金庫番・掃除の担当者をすべてクリアします。メンバーのスケジュールは残ります。']));
+  dutyCard.appendChild(btn({width:'100%',background:C.warnText,color:'#fff',border:'none',
+    borderRadius:'10px',padding:'12px',fontSize:'13px',fontWeight:'700',minHeight:'48px'},
+    ()=>{
+      if(!confirm(state.year+'年'+state.month+'月の担当欄をすべてクリアしますか？'))return;
+      const nd={...state.data};
+      days().forEach(d=>{
+        const ds=toDS(d);if(!nd[ds])return;
+        const dd={...(nd[ds])};
+        DUTY_COLS.forEach(dc=>{
+          const lbl=DUTY_STATUS_MAP[dc.key];
+          dd[dc.key]=[];
+          state.members.forEach(({name})=>{
+            const p=Array.isArray(dd[name])?dd[name]:(dd[name]?[dd[name]]:[]);
+            if(p.includes(lbl))dd[name]=p.filter(s=>s!==lbl);
+          });
+        });
+        nd[ds]=dd;
+      });
+      setState({data:nd,showResetModal:false,activeAction:'edit'},true);
+    },'担当欄をクリア'));
+  sheet.appendChild(dutyCard);
+
+  // ── スケジュールリセット ──
+  const SCHEDULE_STS=['責任者','夜間現場','公休','有休','午前半休','午後半休'];
+  const schedCard=div({background:'#ede8f5',border:'1px solid #c9b8dc',
+    borderRadius:'14px',padding:'14px 16px',marginBottom:'12px'});
+  schedCard.appendChild(div({fontWeight:'700',fontSize:'14px',color:'#7a5080',
+    marginBottom:'6px'},['📅 スケジュールリセット']));
+  schedCard.appendChild(div({fontSize:'12px',color:'#7a5080',marginBottom:'6px',lineHeight:'1.6'},
+    ['メンバーのスケジュール（公休・有休・半休・責任者・夜間現場）をクリアします。担当欄（事務所番・金庫番・掃除）は残ります。']));
+
+  // メンバー選択（個別 or 全員）
+  const memberSel=div({marginBottom:'12px'});
+  memberSel.appendChild(div({fontSize:'11px',color:'#7a5080',fontWeight:'700',marginBottom:'6px'},['対象メンバーを選択（複数可）']));
+  const selSet=new Set(['__all__']);
+  const memberGrid=div({display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(72px,1fr))',gap:'6px',marginBottom:'8px'});
+
+  // 全員ボタン
+  const allBtn=btn({background:'#7a5080',color:'#fff',border:'2px solid #7a5080',
+    borderRadius:'8px',padding:'8px 4px',fontSize:'12px',fontWeight:'700',minHeight:'44px'},
+    ()=>{
+      if(selSet.has('__all__')){selSet.clear();}
+      else{selSet.clear();selSet.add('__all__');}
+      updateSelButtons();
+    },'✓ 全員');
+  memberGrid.appendChild(allBtn);
+
+  // 個別メンバーボタン
+  const memBtns={};
+  state.members.forEach(m=>{
+    const b=btn({background:'#f5f5f5',color:C.text,border:'2px solid '+C.border,
+      borderRadius:'8px',padding:'8px 4px',fontSize:'12px',fontWeight:'500',minHeight:'44px'},
+      ()=>{
+        selSet.delete('__all__');
+        if(selSet.has(m.name))selSet.delete(m.name);
+        else selSet.add(m.name);
+        updateSelButtons();
+      },m.name);
+    memBtns[m.name]=b;
+    memberGrid.appendChild(b);
+  });
+
+  function updateSelButtons(){
+    const isAll=selSet.has('__all__');
+    allBtn.style.background=isAll?'#7a5080':'#f5f5f5';
+    allBtn.style.color=isAll?'#fff':'#3d1f2a';
+    allBtn.textContent=isAll?'✓ 全員':'全員';
+    state.members.forEach(m=>{
+      const sel=selSet.has(m.name);
+      memBtns[m.name].style.background=sel?'#ede8f5':'#f5f5f5';
+      memBtns[m.name].style.color=sel?'#7a5080':C.text;
+      memBtns[m.name].style.border='2px solid '+(sel?'#7a5080':C.border);
+      memBtns[m.name].style.fontWeight=sel?'700':'500';
+    });
+  }
+  updateSelButtons();
+  memberSel.appendChild(memberGrid);
+  schedCard.appendChild(memberSel);
+
+  schedCard.appendChild(btn({width:'100%',background:'#7a5080',color:'#fff',border:'none',
+    borderRadius:'10px',padding:'12px',fontSize:'13px',fontWeight:'700',minHeight:'48px'},
+    ()=>{
+      const targets=selSet.has('__all__')?state.members.map(m=>m.name):[...selSet];
+      if(!targets.length){alert('対象メンバーを選択してください');return;}
+      const label=selSet.has('__all__')?'全員':'選択メンバー';
+      if(!confirm(state.year+'年'+state.month+'月の'+label+'のスケジュールをクリアしますか？'))return;
+      const nd={...state.data};
+      days().forEach(d=>{
+        const ds=toDS(d);if(!nd[ds])return;
+        const dd={...(nd[ds])};
+        targets.forEach(name=>{
+          const cur=Array.isArray(dd[name])?dd[name]:(dd[name]?[dd[name]]:[]);
+          // 担当ラベルは残し、スケジュールのみ削除
+          dd[name]=cur.filter(s=>!SCHEDULE_STS.includes(s));
+        });
+        nd[ds]=dd;
+      });
+      setState({data:nd,showResetModal:false,activeAction:'edit'},true);
+    },'スケジュールをクリア'));
+  sheet.appendChild(schedCard);
+
+  // キャンセル
+  sheet.appendChild(btn({width:'100%',background:'#f5f5f5',border:'none',color:C.sub,
+    borderRadius:'12px',padding:'14px',fontSize:'13px',minHeight:'52px'},
+    ()=>setState({showResetModal:false,activeAction:'edit'}),'キャンセル'));
+
+  return ov;
 }
 
 // ── ASSIGN MODAL
