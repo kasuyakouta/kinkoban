@@ -124,7 +124,7 @@ const C={
 // DATE UTILS
 // ============================================================
 function getMonthDays(y,m){const days=[];for(let d=new Date(y,m-1,21);d<=new Date(y,m,20);d.setDate(d.getDate()+1))days.push(new Date(d));return days;}
-function toDS(d){return d.toISOString().slice(0,10);}
+function toDS(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function isHol(d){return HOLIDAYS.includes(toDS(d));}
 function isWk(d){const w=d.getDay();return w===0||w===6;}
 function isReq(d){return isWk(d)||isHol(d);}
@@ -136,20 +136,37 @@ const TODAY_DS=toDS(new Date());
 // GAS API通信
 // ============================================================
 async function gasLoad(){
-  const res=await fetch(GAS_URL+'?action=load',{redirect:'follow'});
-  const data=await res.json();
-  if(!data.ok)throw new Error(data.error||'load failed');
-  return data;
+  try{
+    const res=await fetch(GAS_URL+'?action=load',{redirect:'follow'});
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    const data=await res.json();
+    if(!data.ok)throw new Error(data.error||'load failed');
+    return data;
+  }catch(e){
+    throw new Error('読み込み失敗: '+e.message);
+  }
 }
 
 async function gasSave(shiftData,members){
-  const url=GAS_URL+'?action=save'
-    +'&shift='+encodeURIComponent(JSON.stringify(shiftData))
-    +'&members='+encodeURIComponent(JSON.stringify(members));
-  const res=await fetch(url,{redirect:'follow'});
-  const data=await res.json();
-  if(!data.ok)throw new Error(data.error||'save failed');
-  return data;
+  // POSTで送信（GETはURL長制限でデータ量が多いと失敗するため）
+  try{
+    const body=new URLSearchParams({
+      action:'save',
+      shift:JSON.stringify(shiftData),
+      members:JSON.stringify(members),
+    });
+    const res=await fetch(GAS_URL,{
+      method:'POST',
+      body:body,
+      redirect:'follow',
+    });
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    const data=await res.json();
+    if(!data.ok)throw new Error(data.error||'save failed');
+    return data;
+  }catch(e){
+    throw new Error('保存失敗: '+e.message);
+  }
 }
 
 // 接続テスト＆URL保存
@@ -223,7 +240,7 @@ const today=new Date();
 let state={
   year:today.getFullYear(),month:today.getMonth()+1,
   data:{},members:DEFAULT_MEMBERS,
-  editMode:'view',showMembers:false,showSettings:false,activeAction:'view',showToday:false,
+  editMode:'view',showMembers:false,showSettings:false,activeAction:'view',showToday:false,swapMode:false,swapDayA:null,swapDayB:null,
   tab:'shift',modal:null,personalMember:null,
   tempDuty:[],tempStatus:[],
   copyMode:false,copyStatus:null,copyDays:new Set(),
@@ -388,6 +405,7 @@ function buildApp(){
   root.appendChild(el('div',{id:'save-indicator',style:{position:'fixed',top:'8px',left:'50%',transform:'translateX(-50%) translateY(-8px)',background:'rgba(46,125,94,0.92)',color:'#fff',borderRadius:'20px',padding:'5px 16px',fontSize:'12px',fontWeight:'700',zIndex:'999',pointerEvents:'none',opacity:'0',transition:'opacity 0.25s,transform 0.25s',boxShadow:'0 2px 8px rgba(0,0,0,0.18)',whiteSpace:'nowrap'}},['✓ 保存しました']));
   const content=div({flex:'1',paddingBottom:'68px',overflowY:'auto',WebkitOverflowScrolling:'touch'});
   if((showMembers||activeAction==='member')&&tab==='shift'&&!showToday)content.appendChild(buildMemberEditor());
+  if(state.swapMode&&tab==='shift'&&!showToday)content.appendChild(buildSwapBanner());
   if(showToday)content.appendChild(buildTodayDashboard());
   else if(showSettings)content.appendChild(buildSettingsPanel());
   else if(tab==='shift')content.appendChild(buildShiftTab(ds,mm,sm));
@@ -419,12 +437,12 @@ function buildHeader(misOfc,misSafe,misClean){
     const navBtn=(lbl,cb)=>btn({background:'#fff',border:'1px solid '+C.aLight,color:C.accent,
       borderRadius:'8px',width:'36px',height:'36px',display:'flex',alignItems:'center',
       justifyContent:'center',fontSize:'16px',fontWeight:'700',flexShrink:'0'},cb,lbl);
-    nav.appendChild(navBtn('◀',()=>{let m=state.month-1,y=state.year;if(m<1){m=12;y--;}setState({month:m,year:y});}));
+    nav.appendChild(navBtn('◀',()=>{let m=state.month-1,y=state.year;if(m<1){m=12;y--;}setState({month:m,year:y,swapDayA:null,swapDayB:null});}));
     const mbox=div({background:'#fff',border:'1px solid '+C.aLight,borderRadius:'8px',
       padding:'5px 10px',fontWeight:'700',fontSize:'14px',color:C.accent,textAlign:'center',minWidth:'100px'});
     mbox.appendChild(txt(year+'年'+month+'月'));
     nav.appendChild(mbox);
-    nav.appendChild(navBtn('▶',()=>{let m=state.month+1,y=state.year;if(m>12){m=1;y++;}setState({month:m,year:y});}));
+    nav.appendChild(navBtn('▶',()=>{let m=state.month+1,y=state.year;if(m>12){m=1;y++;}setState({month:m,year:y,swapDayA:null,swapDayB:null});}));
     top.appendChild(nav);
   }
   h.appendChild(top);
@@ -436,6 +454,7 @@ function buildHeader(misOfc,misSafe,misClean){
       {key:'edit',  label:'✏️ 編集'},
       {key:'assign',label:'✨ 振り分け'},
       {key:'member',label:'👥 メンバー'},
+      {key:'swap',  label:'🔄 入れ替え'},
       {key:'reset', label:'🗑 リセット'},
       {key:'sync',  label:'📥 同期'},
       {key:'settings',label:'⚙️ 設定'},
@@ -454,6 +473,7 @@ function buildHeader(misOfc,misSafe,misClean){
         ||(key==='member'&&showMembers)
         ||(key==='settings'&&showSettings)
         ||(key==='assign'&&activeAction==='assign')
+        ||(key==='swap'&&state.swapMode)
         ||(key==='reset'&&activeAction==='reset')
         ||(key==='sync'&&activeAction==='sync');
 
@@ -490,6 +510,7 @@ function buildHeader(misOfc,misSafe,misClean){
             }).catch(()=>{setSaveStatus('error');setState({activeAction:editMode==='edit'?'edit':'view'});});
           } else { alert('GASのURLが設定されていません。⚙️設定からURLを入力してください。');setState({activeAction:'view'}); }
         }
+        else if(key==='swap'){setState({swapMode:!state.swapMode,swapDayA:null,swapDayB:null,editMode:'edit',showMembers:false,showSettings:false,activeAction:state.swapMode?'edit':'swap'});}
         else if(key==='settings'){setState({showSettings:!showSettings,showMembers:false,activeAction:showSettings?'view':'settings'});}
       },label);
       tabBar.appendChild(b);
@@ -650,10 +671,31 @@ function buildTable(ds,mm,sm){
     const isToday=toDS(date)===TODAY_DS;
     const tr=el('tr',{style:{background:rowBg,borderTop:is21?'2px solid '+C.accent:(isToday?'2px solid #f7a800':''),borderBottom:is20?'2px solid '+C.accent:(isToday?'2px solid #f7a800':''),outline:isToday?'':''}});
     function mkTd(s){return el('td',{style:{border:'1px solid '+C.border,padding:'3px 2px',height:'44px',verticalAlign:'middle',textAlign:'center',whiteSpace:'nowrap',overflow:'hidden',...s}});}
-    const dateTd=mkTd({color:isToday?'#fff':dc,fontWeight:'700',fontSize:'12px',background:isToday?'#f7a800':rowBg,position:'relative'});
+    // swap モード時の日付セルスタイル
+    const isSwapA=state.swapMode&&state.swapDayA===dstr;
+    const isSwapB=state.swapMode&&state.swapDayB===dstr;
+    const dateBg=isToday?'#f7a800':isSwapA?'#c2506e':isSwapB?'#7a5080':rowBg;
+    const dateFg=isToday||isSwapA||isSwapB?'#fff':dc;
+    const dateTd=mkTd({color:dateFg,fontWeight:'700',fontSize:'12px',background:dateBg,position:'relative',cursor:state.swapMode?'pointer':'default'});
     dateTd.appendChild(document.createTextNode((date.getMonth()+1)+'/'+date.getDate()));
-    if(isToday)dateTd.appendChild(el('span',{style:{fontSize:'8px',display:'block',color:'#fff',opacity:'0.9'}},'今日'));
-    if(isHol(date))dateTd.appendChild(el('span',{style:{fontSize:'9px',color:isToday?'#fff':C.sun,display:'block'}},['祝']));
+    if(isToday&&!isSwapA&&!isSwapB)dateTd.appendChild(el('span',{style:{fontSize:'8px',display:'block',color:'#fff',opacity:'0.9'}},'今日'));
+    if(isSwapA)dateTd.appendChild(el('span',{style:{fontSize:'8px',display:'block',color:'#fff'}},'日A'));
+    if(isSwapB)dateTd.appendChild(el('span',{style:{fontSize:'8px',display:'block',color:'#fff'}},'日B'));
+    if(isHol(date)&&!isSwapA&&!isSwapB)dateTd.appendChild(el('span',{style:{fontSize:'9px',color:isToday?'#fff':C.sun,display:'block'}},['祝']));
+    // swap モード時のタップ処理
+    if(state.swapMode){
+      dateTd.addEventListener('click',()=>{
+        if(!state.swapDayA){
+          setState({swapDayA:dstr});
+        } else if(state.swapDayA===dstr){
+          setState({swapDayA:null}); // 選択解除
+        } else if(!state.swapDayB){
+          setState({swapDayB:dstr});
+        } else {
+          setState({swapDayB:dstr}); // B を更新
+        }
+      });
+    }
     tr.appendChild(dateTd);
     const wdTd=mkTd({color:dc,fontWeight:'800',fontSize:'13px',background:rowBg,borderRight:'2px solid '+C.strong});
     wdTd.appendChild(document.createTextNode(dayLbl(date)));tr.appendChild(wdTd);
@@ -768,29 +810,129 @@ function buildMemberModalContent(){
 }
 
 function buildCopyModeContent(){
-  const{modal,copyStatus,copyDays}=state;const ss=STATUS_STYLE[copyStatus];const wrap=div({});
+  const{modal,copyStatus}=state;
+  const ss=STATUS_STYLE[copyStatus];
+  const wrap=div({});
+
+  // ヘッダー
   const hdr=div({display:'flex',alignItems:'center',gap:'8px',marginBottom:'8px'});
   hdr.appendChild(div({background:ss?.bg||C.aLight,color:ss?.text||C.accent,border:'2px solid '+(ss?.border||C.aLight),borderRadius:'8px',padding:'5px 14px',fontWeight:'700',fontSize:'14px'},['📋 '+copyStatus]));
   hdr.appendChild(div({fontWeight:'700',fontSize:'14px',color:C.text},['を複製']));
-  wrap.appendChild(hdr);wrap.appendChild(div({fontSize:'12px',color:C.muted,marginBottom:'8px'},['対象：'+modal.member]));
+  wrap.appendChild(hdr);
+  wrap.appendChild(div({fontSize:'12px',color:C.muted,marginBottom:'8px'},['対象：'+modal.member]));
   wrap.appendChild(div({background:'#fdf3dc',border:'1px solid #d4a843',borderRadius:'8px',padding:'8px 10px',fontSize:'12px',color:'#7d5a0a',marginBottom:'12px'},['📅 適用したい日付をタップして選択。']));
+
+  // 選択状態はローカル変数で管理（再描画なし）
+  const localSelected=new Set(state.copyDays);
+
+  // カウント表示・ボタンを先に参照できるよう前方宣言
+  let countEl,applyBtn;
+
+  function updateUI(){
+    const sz=localSelected.size;
+    if(countEl){
+      countEl.textContent=sz>0?sz+'日を選択中':'日付を選んでください';
+      countEl.style.color=sz>0?(ss?.text||C.accent):C.muted;
+      countEl.style.fontWeight=sz>0?'700':'400';
+    }
+    if(applyBtn){
+      applyBtn.textContent=sz>0?sz+'日に適用':'日付を選択';
+      applyBtn.style.background=sz>0?C.accent:'#ddd';
+      applyBtn.style.cursor=sz>0?'pointer':'not-allowed';
+    }
+  }
+
+  // 日付グリッド
   const grid=div({display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:'4px',maxHeight:'260px',overflowY:'auto',marginBottom:'12px'});
   days().forEach(d=>{
-    const ds=toDS(d);const selected=copyDays.has(ds);const dc2=dayClr(d);
-    const b=btn({background:selected?(ss?.bg||C.aLight):(isWk(d)||isHol(d))?C.wkBg:'#fafafa',border:'2px solid '+(selected?(ss?.border||C.accent):C.border),borderRadius:'8px',padding:'8px 2px',fontSize:'12px',fontWeight:selected?'700':'400',color:selected?(ss?.text||C.accent):dc2,lineHeight:'1.3',minHeight:'50px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center'},()=>{const nd=new Set(copyDays);nd.has(ds)?nd.delete(ds):nd.add(ds);setState({copyDays:nd});});
-    b.appendChild(div({},[''+(d.getMonth()+1)+'/'+d.getDate()]));b.appendChild(div({fontSize:'10px'},[dayLbl(d)]));if(selected)b.appendChild(div({fontSize:'9px'},['✓']));grid.appendChild(b);
+    const ds=toDS(d);
+    const dc2=dayClr(d);
+    const isWH=isWk(d)||isHol(d);
+
+    function getBg(sel){return sel?(ss?.bg||C.aLight):isWH?C.wkBg:'#fafafa';}
+    function getBorder(sel){return '2px solid '+(sel?(ss?.border||C.accent):C.border);}
+    function getColor(sel){return sel?(ss?.text||C.accent):dc2;}
+
+    const b=document.createElement('button');
+    const sel0=localSelected.has(ds);
+    Object.assign(b.style,{
+      background:getBg(sel0),border:getBorder(sel0),borderRadius:'8px',
+      padding:'8px 2px',fontSize:'12px',fontWeight:sel0?'700':'400',
+      color:getColor(sel0),lineHeight:'1.3',minHeight:'50px',
+      display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
+      width:'100%',cursor:'pointer',fontFamily:'inherit',
+    });
+    const dateDiv=document.createElement('div');
+    dateDiv.textContent=(d.getMonth()+1)+'/'+d.getDate();
+    const dayDiv=document.createElement('div');
+    dayDiv.style.fontSize='10px';
+    dayDiv.textContent=dayLbl(d);
+    const checkDiv=document.createElement('div');
+    checkDiv.style.fontSize='9px';
+    checkDiv.textContent='✓';
+    checkDiv.style.display=sel0?'':'none';
+    b.appendChild(dateDiv);b.appendChild(dayDiv);b.appendChild(checkDiv);
+
+    b.addEventListener('click',()=>{
+      const nowSel=localSelected.has(ds);
+      nowSel?localSelected.delete(ds):localSelected.add(ds);
+      const nextSel=localSelected.has(ds);
+      // ボタンのみ直接更新（再描画なし）
+      b.style.background=getBg(nextSel);
+      b.style.border=getBorder(nextSel);
+      b.style.color=getColor(nextSel);
+      b.style.fontWeight=nextSel?'700':'400';
+      checkDiv.style.display=nextSel?'':'none';
+      // カウント・適用ボタン更新
+      updateUI();
+    });
+    grid.appendChild(b);
   });
   wrap.appendChild(grid);
-  wrap.appendChild(div({textAlign:'center',fontSize:'13px',marginBottom:'12px',color:copyDays.size>0?(ss?.text||C.accent):C.muted,fontWeight:copyDays.size>0?'700':'400'},[copyDays.size>0?copyDays.size+'日を選択中':'日付を選んでください']));
+
+  // カウント表示
+  countEl=div({textAlign:'center',fontSize:'13px',marginBottom:'12px',color:C.muted,fontWeight:'400'},['日付を選んでください']);
+  wrap.appendChild(countEl);
+
+  // ボタン行
   const row=div({display:'flex',gap:'8px'});
-  row.appendChild(btn({flex:'1',background:'#f5f5f5',border:'none',color:C.sub,borderRadius:'10px',padding:'14px',fontSize:'12px',minHeight:'52px'},()=>setState({copyDays:new Set()}),'すべて解除'));
-  row.appendChild(btn({flex:'2',background:copyDays.size>0?C.accent:'#ddd',border:'none',color:'#fff',borderRadius:'10px',padding:'14px',fontSize:'13px',fontWeight:'700',minHeight:'52px',cursor:copyDays.size>0?'pointer':'not-allowed'},()=>{
-    if(!copyDays.size)return;
+
+  // すべて解除
+  row.appendChild(btn({flex:'1',background:'#f5f5f5',border:'none',color:C.sub,borderRadius:'10px',padding:'14px',fontSize:'12px',minHeight:'52px'},()=>{
+    localSelected.clear();
+    // 全ボタンの選択状態をリセット
+    grid.querySelectorAll('button').forEach((b2,i)=>{
+      const d2=days()[i];const ds2=toDS(d2);const isWH2=isWk(d2)||isHol(d2);
+      b2.style.background=isWH2?C.wkBg:'#fafafa';
+      b2.style.border='2px solid '+C.border;
+      b2.style.color=dayClr(d2);b2.style.fontWeight='400';
+      b2.querySelector('div:last-child').style.display='none';
+    });
+    updateUI();
+  },'すべて解除'));
+
+  // 適用ボタン
+  applyBtn=document.createElement('button');
+  Object.assign(applyBtn.style,{flex:'2',background:'#ddd',color:'#fff',border:'none',borderRadius:'10px',padding:'14px',fontSize:'13px',fontWeight:'700',minHeight:'52px',cursor:'not-allowed',fontFamily:'inherit'});
+  applyBtn.textContent='日付を選択';
+  applyBtn.addEventListener('click',()=>{
+    if(!localSelected.size)return;
     const member=modal.member;let d={...state.data};
-    copyDays.forEach(ds=>{const cur=Array.isArray(d[ds]?.[member])?d[ds][member]:(d[ds]?.[member]?[d[ds][member]]:[]);const next=cur.includes(copyStatus)?cur:[...cur,copyStatus];const dd={...(d[ds]||{})};const synced=syncMemberToDuty({...dd,[member]:next},member,next);d={...d,[ds]:synced};});
+    localSelected.forEach(ds=>{
+      const cur=Array.isArray(d[ds]?.[member])?d[ds][member]:(d[ds]?.[member]?[d[ds][member]]:[]);
+      const next=cur.includes(copyStatus)?cur:[...cur,copyStatus];
+      const dd={...(d[ds]||{})};
+      const synced=syncMemberToDuty({...dd,[member]:next},member,next);
+      d={...d,[ds]:synced};
+    });
+    // stateを更新してモーダルを閉じる
+    state.copyDays=new Set();
     setState({data:d,copyMode:false,copyStatus:null,copyDays:new Set(),modal:null},true);
-  },copyDays.size>0?copyDays.size+'日に適用':'日付を選択'));
-  wrap.appendChild(row);return wrap;
+  });
+  row.appendChild(applyBtn);
+  wrap.appendChild(row);
+  updateUI();
+  return wrap;
 }
 
 
@@ -941,9 +1083,10 @@ function buildDutyBalanceChart(ds){
   });
 
   const entries=Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+  if(!entries.length)return div({});
   const maxCount=Math.max(...entries.map(([,v])=>v),1);
   const totalCount=entries.reduce((s,[,v])=>s+v,0);
-  const avg=totalCount/mm.length;
+  const avg=mm.length>0?totalCount/mm.length:0;
 
   const section=div({background:'#fff',border:'1px solid '+C.border,borderRadius:'14px',padding:'14px',marginBottom:'20px'});
   const hdr=div({display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'12px'});
@@ -980,6 +1123,147 @@ function buildDutyBalanceChart(ds){
   });
   section.appendChild(legend);
   return section;
+}
+
+
+// ============================================================
+// 🔄 担当入れ替えバナー＆ロジック
+// ============================================================
+function buildSwapBanner(){
+  const {swapDayA,swapDayB}=state;
+  const banner=div({
+    background:'#fff',borderBottom:'2px solid #7a5080',
+    padding:'10px 14px',
+  });
+
+  // タイトル
+  banner.appendChild(div({
+    fontSize:'13px',fontWeight:'700',color:'#7a5080',marginBottom:'8px',
+  },['🔄 担当入れ替えモード']));
+
+  // 説明
+  banner.appendChild(div({
+    fontSize:'11px',color:C.muted,marginBottom:'10px',lineHeight:'1.6',
+  },['日付欄をタップしてA・Bを選択してください（事務所番・金庫番・掃除の担当が入れ替わります）']));
+
+  // 選択状態表示
+  const selRow=div({display:'flex',gap:'8px',marginBottom:'10px'});
+  const slotStyle=(label,ds,color)=>{
+    const slot=div({
+      flex:'1',borderRadius:'10px',padding:'8px 10px',textAlign:'center',
+      background:ds?color+'22':'#f5f5f5',
+      border:'2px solid '+(ds?color:C.border),
+    });
+    slot.appendChild(div({fontSize:'10px',color:ds?color:C.muted,fontWeight:'700',marginBottom:'2px'},[label]));
+    if(ds){
+      const d=new Date(ds);
+      slot.appendChild(div({fontSize:'14px',fontWeight:'700',color},[
+        (d.getMonth()+1)+'/'+d.getDate()+'（'+dayLbl(d)+'）'
+      ]));
+      // 現在の担当表示
+      const duties=DUTY_COLS.map(dc=>{
+        const names=getDutyNames(ds,dc.key);
+        return names.length?dc.label+'：'+names.join(','):'';
+      }).filter(Boolean);
+      if(duties.length){
+        slot.appendChild(div({fontSize:'10px',color,marginTop:'2px',lineHeight:'1.5'},[duties.join(' / ')]));
+      }
+    } else {
+      slot.appendChild(div({fontSize:'13px',color:C.muted},['未選択']));
+    }
+    return slot;
+  };
+  selRow.appendChild(slotStyle('日付 A',swapDayA,'#c2506e'));
+  const arrow=div({display:'flex',alignItems:'center',justifyContent:'center',fontSize:'18px',color:C.muted,flexShrink:'0'},['⇄']);
+  selRow.appendChild(arrow);
+  selRow.appendChild(slotStyle('日付 B',swapDayB,'#7a5080'));
+  banner.appendChild(selRow);
+
+  // ボタン行
+  const btnRow=div({display:'flex',gap:'8px'});
+
+  // リセットボタン
+  btnRow.appendChild(btn({
+    flex:'1',background:'#f5f5f5',border:'none',color:C.sub,
+    borderRadius:'10px',padding:'10px',fontSize:'12px',minHeight:'44px',
+  },()=>setState({swapDayA:null,swapDayB:null}),'選択リセット'));
+
+  // 入れ替え実行ボタン
+  const canSwap=swapDayA&&swapDayB&&swapDayA!==swapDayB;
+  btnRow.appendChild(btn({
+    flex:'2',
+    background:canSwap?'linear-gradient(135deg,#c2506e,#7a5080)':'#ddd',
+    border:'none',color:'#fff',borderRadius:'10px',padding:'10px',
+    fontSize:'13px',fontWeight:'700',minHeight:'44px',
+    cursor:canSwap?'pointer':'not-allowed',
+  },()=>{
+    if(!canSwap)return;
+    executeSwap(swapDayA,swapDayB);
+  },'🔄 入れ替え実行'));
+
+  // 終了ボタン
+  btnRow.appendChild(btn({
+    flex:'1',background:'#fff',border:'1px solid '+C.border,color:C.sub,
+    borderRadius:'10px',padding:'10px',fontSize:'12px',minHeight:'44px',
+  },()=>setState({swapMode:false,swapDayA:null,swapDayB:null,activeAction:'edit'}),'終了'));
+
+  banner.appendChild(btnRow);
+  return banner;
+}
+
+function executeSwap(dsA,dsB){
+  const d={...state.data};
+  const ddA={...(d[dsA]||{})};
+  const ddB={...(d[dsB]||{})};
+
+  // 担当キー（__office__/__safe__/__clean__）のみ入れ替え
+  const tmpDuties={};
+  DUTY_COLS.forEach(dc=>{
+    tmpDuties[dc.key]={
+      a:[...(ddA[dc.key]||[])],
+      b:[...(ddB[dc.key]||[])],
+    };
+  });
+
+  // 担当キーを入れ替え
+  DUTY_COLS.forEach(dc=>{
+    ddA[dc.key]=tmpDuties[dc.key].b;
+    ddB[dc.key]=tmpDuties[dc.key].a;
+  });
+
+  // メンバーの担当ステータス（事務所番・金庫番・掃除）も同期
+  const DUTY_LABELS=DUTY_COLS.map(dc=>dc.label);
+  state.members.forEach(({name})=>{
+    // A日のメンバーステータスから担当ラベルを除去し、B日の担当に基づき再設定
+    const stsA=(ddA[name]||[]).filter(s=>!DUTY_LABELS.includes(s));
+    const stsB=(ddB[name]||[]).filter(s=>!DUTY_LABELS.includes(s));
+    DUTY_COLS.forEach(dc=>{
+      if((ddA[dc.key]||[]).includes(name))stsA.push(dc.label);
+      if((ddB[dc.key]||[]).includes(name))stsB.push(dc.label);
+    });
+    if(stsA.length||ddA[name])ddA[name]=stsA;
+    if(stsB.length||ddB[name])ddB[name]=stsB;
+  });
+
+  d[dsA]=ddA;
+  d[dsB]=ddB;
+
+  const dA=new Date(dsA),dB=new Date(dsB);
+  setState({
+    data:d,
+    swapDayA:null,swapDayB:null,
+  },true);
+
+  // 完了通知
+  const{ov,sheet}=buildSheet(()=>ov.remove());
+  sheet.appendChild(div({fontWeight:'700',fontSize:'15px',color:'#2e7d5e',marginBottom:'8px'},['✅ 入れ替え完了！']));
+  sheet.appendChild(div({fontSize:'13px',color:C.text,marginBottom:'16px'},[
+    (dA.getMonth()+1)+'/'+dA.getDate()+'（'+dayLbl(dA)+'）と '+
+    (dB.getMonth()+1)+'/'+dB.getDate()+'（'+dayLbl(dB)+'）の担当を入れ替えました。'
+  ]));
+  sheet.appendChild(btn({width:'100%',background:C.accent,color:'#fff',border:'none',borderRadius:'10px',padding:'14px',fontSize:'14px',fontWeight:'700',minHeight:'52px'},()=>{ov.remove();},'閉じる'));
+  const appEl=document.getElementById('app');
+  if(appEl)appEl.appendChild(ov);
 }
 
 // ── SUMMARY TAB
