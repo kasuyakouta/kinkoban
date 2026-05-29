@@ -73,7 +73,10 @@ button:active{opacity:0.7;transform:scale(0.97)}
 const LS_URL  = 'shift_gas_url_v2';
 const LS_DATA = 'shift_data_v7';
 const LS_MEM  = 'shift_members_v7';
-let GAS_URL   = localStorage.getItem(LS_URL) || '';
+
+// ★ GASウェブアプリURL（埋め込み済み）
+const PRESET_GAS_URL = 'https://script.google.com/macros/s/AKfycbzjhujE1cfG7JwZJMfdo6b7_rJTbu9ntfGdTv7-l-KcqFKxNgZVJji7_Xj8_nlRbU6-BA/exec';
+let GAS_URL = localStorage.getItem(LS_URL) || PRESET_GAS_URL;
 
 // ============================================================
 // CONSTANTS
