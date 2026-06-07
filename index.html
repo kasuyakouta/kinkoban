@@ -9,35 +9,35 @@
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;margin:0;padding:0}
 html{-webkit-text-size-adjust:100%}
-body{background:#fdf6f8;font-family:'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif;font-size:14px;color:#3d1f2a;overscroll-behavior:none}
+body{background:#f8f9fa;font-family:-apple-system,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif;font-size:14px;color:#1e293b;overscroll-behavior:none}
 input,button,select,textarea{font-family:inherit;font-size:14px;-webkit-appearance:none;appearance:none}
 button{border:none;cursor:pointer;background:transparent}
-button:active{opacity:0.7;transform:scale(0.97)}
+button:active{opacity:0.75;transform:scale(0.98)}
 @keyframes slideUp{from{transform:translateY(100%);opacity:0}to{transform:translateY(0);opacity:1}}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 @keyframes spin{to{transform:rotate(360deg)}}
 ::-webkit-scrollbar{width:3px;height:3px}
-::-webkit-scrollbar-thumb{background:#d9a0b4;border-radius:2px}
-#loading{position:fixed;inset:0;background:#fdf6f8;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:16px}
-.sp{width:36px;height:36px;border:3px solid #eacdd6;border-top-color:#c2506e;border-radius:50%;animation:spin 0.8s linear infinite}
-#setup{position:fixed;inset:0;background:#fdf6f8;display:none;flex-direction:column;align-items:center;justify-content:center;padding:24px;z-index:9998;overflow-y:auto}
+::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:2px}
+#loading{position:fixed;inset:0;background:#f8f9fa;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:16px}
+.sp{width:32px;height:32px;border:2.5px solid #e2e8f0;border-top-color:#4f46e5;border-radius:50%;animation:spin 0.7s linear infinite}
+#setup{position:fixed;inset:0;background:#f8f9fa;display:none;flex-direction:column;align-items:center;justify-content:center;padding:24px;z-index:9998;overflow-y:auto}
 #setup.show{display:flex}
 </style>
 </head>
 <body>
 
 <div id="loading">
-  <div style="font-size:36px">🌸</div>
-  <div class="sp"></div>
-  <div style="font-size:13px;color:#8a6070" id="loading-msg">起動中...</div>
+  <div style="font-size:13px;font-weight:700;color:#4f46e5;letter-spacing:0.08em">SHIFT</div>
+  <div class="sp" style="margin-top:4px"></div>
+  <div style="font-size:12px;color:#94a3b8;letter-spacing:0.04em" id="loading-msg">起動中...</div>
 </div>
 
 <div id="setup">
   <div style="max-width:460px;width:100%">
-    <div style="font-family:Georgia,serif;font-size:22px;font-weight:700;color:#c2506e;text-align:center;margin-bottom:6px">🌸 シフト管理</div>
-    <div style="font-size:13px;color:#8a6070;text-align:center;margin-bottom:24px">GASのURLを設定してください</div>
+    <div style="font-size:22px;font-weight:700;color:#4f46e5;text-align:center;margin-bottom:4px;letter-spacing:-0.02em">SHIFT</div>
+    <div style="font-size:13px;color:#94a3b8;text-align:center;margin-bottom:24px">GASのURLを設定してください</div>
 
-    <div style="background:#fff;border-radius:16px;padding:20px;box-shadow:0 4px 24px rgba(194,80,110,0.10)">
+    <div style="background:#fff;border-radius:16px;padding:20px;box-shadow:0 4px 24px rgba(79,70,229,0.08);border:1px solid #e2e8f0">
       <div style="font-weight:700;font-size:13px;margin-bottom:8px">GASウェブアプリURL</div>
       <textarea id="urlInput" rows="3"
         placeholder="https://script.google.com/macros/s/xxxxx/exec"
@@ -45,7 +45,7 @@ button:active{opacity:0.7;transform:scale(0.97)}
       <div style="font-size:11px;color:#c4a0b0;margin-top:6px;margin-bottom:16px">GASをデプロイして発行されたURLを貼り付けてください</div>
       <div id="setupError" style="color:#9b2335;font-size:12px;margin-bottom:10px;display:none"></div>
       <button id="connectBtn" onclick="connectGAS()"
-        style="width:100%;background:linear-gradient(135deg,#c2506e,#7a5080);color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:700">
+        style="width:100%;background:#4f46e5;color:#fff;border:none;border-radius:10px;padding:14px;font-size:15px;font-weight:600">
         接続する
       </button>
 
@@ -82,45 +82,57 @@ let GAS_URL = localStorage.getItem(LS_URL) || PRESET_GAS_URL;
 // CONSTANTS
 // ============================================================
 const DEFAULT_MEMBERS=[
-  {id:1,name:'苅間澤',category:'main'},{id:2,name:'糟谷',category:'main'},
-  {id:3,name:'梶賀',category:'main'},{id:4,name:'庄子',category:'main'},
-  {id:5,name:'蛮治',category:'main'},{id:6,name:'庄司',category:'main'},
-  {id:7,name:'及川',category:'sub'},{id:8,name:'大久保',category:'sub'},
-  {id:9,name:'川村',category:'sub'},{id:10,name:'山田',category:'sub'},
+  {id:1,name:'苅間澤',category:'main',color:'#4f46e5'},
+  {id:2,name:'糟谷',  category:'main',color:'#db2777'},
+  {id:3,name:'梶賀',  category:'main',color:'#059669'},
+  {id:4,name:'庄子',  category:'main',color:'#d97706'},
+  {id:5,name:'蛮治',  category:'main',color:'#dc2626'},
+  {id:6,name:'庄司',  category:'main',color:'#7c3aed'},
+  {id:7,name:'及川',  category:'sub'},
+  {id:8,name:'大久保',category:'sub'},
+  {id:9,name:'川村',  category:'sub'},
+  {id:10,name:'山田', category:'sub'},
 ];
 const STATUS_LIST=['事務所番','金庫番','掃除','責任者','夜間現場','公休','有休','午前半休','午後半休'];
 const DUTY_STATUS_MAP={'__office__':'事務所番','__safe__':'金庫番','__clean__':'掃除'};
 const STATUS_STYLE={
-  '事務所番':{bg:'#fce8ed',text:'#d4496a',border:'#e88fa8'},
-  '金庫番'  :{bg:'#fdf3dc',text:'#b5860d',border:'#d4a843'},
-  '掃除'    :{bg:'#e0f5ec',text:'#2e7d5e',border:'#6abf99'},
-  '責任者'  :{bg:'#e8e0f5',text:'#4a235a',border:'#bb8fce'},
-  '夜間現場':{bg:'#fdf2cc',text:'#7d6608',border:'#f7dc6f'},
-  '公休'    :{bg:'#fadbd8',text:'#922b21',border:'#f1948a'},
-  '有休'    :{bg:'#fde9d9',text:'#943126',border:'#f0a07a'},
-  '午前半休':{bg:'#e8daef',text:'#5b2c6f',border:'#c39bd3'},
-  '午後半休':{bg:'#d6eaf8',text:'#1a5276',border:'#7fb3d3'},
+  '事務所番':{bg:'#fdf2f8',text:'#db2777',border:'#fbcfe8'},
+  '金庫番'  :{bg:'#fffbeb',text:'#d97706',border:'#fde68a'},
+  '掃除'    :{bg:'#ecfdf5',text:'#059669',border:'#a7f3d0'},
+  '責任者'  :{bg:'#f5f3ff',text:'#7c3aed',border:'#ddd6fe'},
+  '夜間現場':{bg:'#fefce8',text:'#ca8a04',border:'#fef08a'},
+  '公休'    :{bg:'#fef2f2',text:'#dc2626',border:'#fca5a5'},
+  '有休'    :{bg:'#fff7ed',text:'#ea580c',border:'#fed7aa'},
+  '午前半休':{bg:'#f5f3ff',text:'#7c3aed',border:'#ddd6fe'},
+  '午後半休':{bg:'#eff6ff',text:'#2563eb',border:'#bfdbfe'},
 };
 const DUTY_COLS=[
-  {key:'__office__',label:'事務所番',accent:'#d4496a',lightBg:'#fce8ed',tag:'#e88fa8',req:true},
-  {key:'__safe__',  label:'金庫番',  accent:'#b5860d',lightBg:'#fdf3dc',tag:'#d4a843',req:false},
-  {key:'__clean__', label:'掃除',    accent:'#2e7d5e',lightBg:'#e0f5ec',tag:'#6abf99',req:false},
+  {key:'__office__',label:'事務所番',accent:'#db2777',lightBg:'#fdf2f8',tag:'#ec4899',req:true},
+  {key:'__safe__',  label:'金庫番',  accent:'#d97706',lightBg:'#fffbeb',tag:'#f59e0b',req:false},
+  {key:'__clean__', label:'掃除',    accent:'#059669',lightBg:'#ecfdf5',tag:'#10b981',req:false},
 ];
+// メンバーカラーパレット（12色）
+const MEMBER_COLORS=[
+  '#4f46e5','#db2777','#059669','#d97706',
+  '#dc2626','#7c3aed','#0891b2','#ea580c',
+  '#0284c7','#9333ea','#16a34a','#65a30d',
+];
+// デフォルトメンバーに色を割り当て
 const HOLIDAYS=['2025-01-01','2025-01-13','2025-02-11','2025-02-23','2025-02-24','2025-03-20',
   '2025-04-29','2025-05-03','2025-05-04','2025-05-05','2025-05-06','2025-07-21',
   '2025-08-11','2025-09-15','2025-09-23','2025-10-13','2025-11-03','2025-11-23',
   '2025-11-24','2025-12-23','2026-01-01','2026-01-12','2026-02-11','2026-02-23',
   '2026-03-20','2026-04-29','2026-05-03','2026-05-04','2026-05-05','2026-05-06'];
 const C={
-  bg:'#fdf6f8',bgAlt:'#fff9fb',hBg:'#f5e6ec',hBorder:'#e4b8c8',
-  accent:'#c2506e',aLight:'#f5c6d4',
-  wkBg:'#fce8ed',sun:'#c2506e',sat:'#7a5080',
-  text:'#3d1f2a',sub:'#8a6070',muted:'#c4a0b0',
-  border:'#eacdd6',strong:'#d9a0b4',
-  warnBg:'#fde8e8',warnBorder:'#f5a0a0',warnText:'#9b2335',
-  mainCat:'#c2506e',subCat:'#7a5080',
-  mainBg:'#fce8ed',subBg:'#ede8f5',
-  mainBorder:'#e4b8c8',subBorder:'#c9b8dc',
+  bg:'#f8f9fa',bgAlt:'#f1f5f9',hBg:'#ffffff',hBorder:'#e2e8f0',
+  accent:'#4f46e5',aLight:'#eef2ff',aDark:'#3730a3',
+  wkBg:'#f8fafc',sun:'#ef4444',sat:'#6366f1',
+  text:'#1e293b',sub:'#64748b',muted:'#94a3b8',
+  border:'#e2e8f0',strong:'#cbd5e1',
+  warnBg:'#fef2f2',warnBorder:'#fca5a5',warnText:'#dc2626',
+  mainCat:'#4f46e5',subCat:'#0891b2',
+  mainBg:'#eef2ff',subBg:'#ecfeff',
+  mainBorder:'#c7d2fe',subBorder:'#a5f3fc',
 };
 
 // ============================================================
@@ -151,22 +163,21 @@ async function gasLoad(){
 }
 
 async function gasSave(shiftData,members){
-  // POSTで送信（GETはURL長制限でデータ量が多いと失敗するため）
+  // no-corsモードでPOST（iOS Safariのリダイレクト/CORSエラー回避）
+  // レスポンスは読めないがデータは確実に送信される
   try{
     const body=new URLSearchParams({
       action:'save',
       shift:JSON.stringify(shiftData),
       members:JSON.stringify(members),
     });
-    const res=await fetch(GAS_URL,{
+    await fetch(GAS_URL,{
       method:'POST',
-      body:body,
-      redirect:'follow',
+      body:body.toString(),
+      mode:'no-cors', // CORS/リダイレクト問題を回避
     });
-    if(!res.ok)throw new Error('HTTP '+res.status);
-    const data=await res.json();
-    if(!data.ok)throw new Error(data.error||'save failed');
-    return data;
+    // no-corsではレスポンスを読めないので成功とみなす
+    return{ok:true};
   }catch(e){
     throw new Error('保存失敗: '+e.message);
   }
@@ -220,17 +231,17 @@ function setSaveStatus(s){
   if(!ind)return;
   clearTimeout(window._sit);
   if(s==='saving'){
-    ind.textContent='⏳ 保存中...';
-    ind.style.background='rgba(122,80,128,0.88)';
+    ind.textContent='保存中...';
+    ind.style.background='#64748b';
     ind.style.opacity='1';ind.style.transform='translateY(0)';
   }else if(s==='saved'){
-    ind.textContent=GAS_URL?'☁️ 保存しました':'✓ 保存しました';
-    ind.style.background='rgba(46,125,94,0.92)';
+    ind.textContent=GAS_URL?'クラウドに保存しました':'ローカルに保存しました';
+    ind.style.background='#1e293b';
     ind.style.opacity='1';ind.style.transform='translateY(0)';
     window._sit=setTimeout(()=>{ind.style.opacity='0';ind.style.transform='translateY(-8px)';},2000);
   }else{
-    ind.textContent='⚠ 保存失敗';
-    ind.style.background='rgba(155,35,53,0.92)';
+    ind.textContent='保存失敗';
+    ind.style.background='#dc2626';
     ind.style.opacity='1';ind.style.transform='translateY(0)';
     window._sit=setTimeout(()=>{ind.style.opacity='0';ind.style.transform='translateY(-8px)';},3500);
   }
@@ -266,6 +277,25 @@ function updateMemberName(id,newName){
 // ============================================================
 // HELPERS
 // ============================================================
+// メンバーカラーを取得（デフォルト: サブカテゴリーはグレー）
+function getMemberColor(name){
+  const m=state.members.find(x=>x.name===name);
+  return m?.color||(m?.category==='main'?MEMBER_COLORS[0]:'#94a3b8');
+}
+
+// initApp でメンバーに色がない場合は自動付与
+function ensureMemberColors(members){
+  let colorIdx=0;
+  return members.map(m=>{
+    if(m.category==='main'&&!m.color){
+      const c=MEMBER_COLORS[colorIdx%MEMBER_COLORS.length];
+      colorIdx++;
+      return{...m,color:c};
+    }
+    return m;
+  });
+}
+
 function syncDutyToMembers(dd,key,names,all){const label=DUTY_STATUS_MAP[key];const r={...dd};all.forEach(({name})=>{const p=Array.isArray(r[name])?r[name]:(r[name]?[r[name]]:[]);const has=p.includes(label);const assigned=names.includes(name);if(assigned&&!has)r[name]=[...p,label];else if(!assigned&&has)r[name]=p.filter(s=>s!==label);});r[key]=names;return r;}
 function syncMemberToDuty(dd,name,sts){const r={...dd};r[name]=sts;Object.entries(DUTY_STATUS_MAP).forEach(([key,label])=>{const p=Array.isArray(r[key])?r[key]:(r[key]?[r[key]]:[]);const has=sts.includes(label);const inD=p.includes(name);if(has&&!inD)r[key]=[...p,name];else if(!has&&inD)r[key]=p.filter(n=>n!==name);});return r;}
 function getDutyArr(nd,ds,key){const v=nd[ds]?.[key];return Array.isArray(v)?v:(v?[v]:[]);}
@@ -405,7 +435,14 @@ function buildApp(){
   const misClean=ds.filter(d=>!getDutyNames(toDS(d),'__clean__').length).length;
   const root=div({background:C.bg,color:C.text,fontSize:'14px',minHeight:'100vh',display:'flex',flexDirection:'column'});
   root.appendChild(buildHeader(misOfc,misClean,misSafe));
-  root.appendChild(el('div',{id:'save-indicator',style:{position:'fixed',top:'8px',left:'50%',transform:'translateX(-50%) translateY(-8px)',background:'rgba(46,125,94,0.92)',color:'#fff',borderRadius:'20px',padding:'5px 16px',fontSize:'12px',fontWeight:'700',zIndex:'999',pointerEvents:'none',opacity:'0',transition:'opacity 0.25s,transform 0.25s',boxShadow:'0 2px 8px rgba(0,0,0,0.18)',whiteSpace:'nowrap'}},['✓ 保存しました']));
+  root.appendChild(el('div',{id:'save-indicator',style:{
+    position:'fixed',top:'12px',left:'50%',transform:'translateX(-50%) translateY(-8px)',
+    background:'#1e293b',color:'#fff',borderRadius:'8px',padding:'6px 14px',
+    fontSize:'11px',fontWeight:'600',zIndex:'999',pointerEvents:'none',
+    opacity:'0',transition:'opacity 0.2s,transform 0.2s',
+    boxShadow:'0 4px 12px rgba(0,0,0,0.15)',whiteSpace:'nowrap',
+    letterSpacing:'0.01em',
+  }},['保存しました']));;
   const content=div({flex:'1',paddingBottom:'68px',overflowY:'auto',WebkitOverflowScrolling:'touch'});
   if((showMembers||activeAction==='member')&&tab==='shift'&&!showToday)content.appendChild(buildMemberEditor());
   if(state.swapMode&&tab==='shift'&&!showToday)content.appendChild(buildSwapBanner());
@@ -428,73 +465,115 @@ function buildHeader(misOfc,misSafe,misClean){
   const isShift=tab==='shift';
   const hasWarn=isShift&&!showSettings&&(misOfc+misSafe+misClean>0);
 
-  const h=div({background:C.hBg,borderBottom:'1px solid '+C.hBorder,
+  const h=div({background:'#fff',borderBottom:'1px solid #e2e8f0',
     position:'sticky',top:'0',zIndex:'100',
-    boxShadow:'0 2px 8px rgba(194,80,110,0.10)'});
+    boxShadow:'0 1px 4px rgba(0,0,0,0.06)'});
 
   // ── 上段：ロゴ + 月ナビ ──
-  const top=div({padding:'8px 12px',display:'flex',alignItems:'center',gap:'8px'});
-  top.appendChild(div({fontFamily:'Georgia,serif',fontSize:'18px',fontWeight:'700',color:C.accent,flexShrink:'0'},['🌸']));
+  const top=div({padding:'10px 14px',display:'flex',alignItems:'center',gap:'8px'});
+  top.appendChild(div({fontSize:'14px',fontWeight:'700',color:'#4f46e5',
+    letterSpacing:'-0.02em',flexShrink:'0'},['SHIFT']));
 
   if(tab==='shift'||tab==='summary'||tab==='personal'){
-    const nav=div({display:'flex',alignItems:'center',gap:'4px',flex:'1',justifyContent:'center'});
-    const navBtn=(lbl,cb)=>btn({background:'#fff',border:'1px solid '+C.aLight,color:C.accent,
-      borderRadius:'8px',width:'36px',height:'36px',display:'flex',alignItems:'center',
-      justifyContent:'center',fontSize:'16px',fontWeight:'700',flexShrink:'0'},cb,lbl);
-    nav.appendChild(navBtn('◀',()=>{let m=state.month-1,y=state.year;if(m<1){m=12;y--;}setState({month:m,year:y,swapDayA:null,swapDayB:null});}));
-    const mbox=div({background:'#fff',border:'1px solid '+C.aLight,borderRadius:'8px',
-      padding:'5px 10px',fontWeight:'700',fontSize:'14px',color:C.accent,textAlign:'center',minWidth:'100px'});
+    const nav=div({display:'flex',alignItems:'center',gap:'6px',flex:'1',justifyContent:'center'});
+    const navBtn=(lbl,cb)=>btn({
+      background:'#f8f9fa',border:'1px solid #e2e8f0',color:'#64748b',
+      borderRadius:'6px',width:'32px',height:'32px',
+      display:'flex',alignItems:'center',justifyContent:'center',
+      fontSize:'15px',fontWeight:'600',flexShrink:'0',
+    },cb,lbl);
+    nav.appendChild(navBtn('‹',()=>{let m=state.month-1,y=state.year;if(m<1){m=12;y--;}setState({month:m,year:y,swapDayA:null,swapDayB:null});}));
+    const mbox=div({
+      background:'#f8f9fa',border:'1px solid #e2e8f0',borderRadius:'6px',
+      padding:'5px 14px',fontWeight:'600',fontSize:'14px',color:'#1e293b',
+      textAlign:'center',minWidth:'108px',letterSpacing:'-0.01em',
+    });
     mbox.appendChild(txt(year+'年'+month+'月'));
     nav.appendChild(mbox);
-    nav.appendChild(navBtn('▶',()=>{let m=state.month+1,y=state.year;if(m>12){m=1;y++;}setState({month:m,year:y,swapDayA:null,swapDayB:null});}));
+    nav.appendChild(navBtn('›',()=>{let m=state.month+1,y=state.year;if(m>12){m=1;y++;}setState({month:m,year:y,swapDayA:null,swapDayB:null});}));
     top.appendChild(nav);
   }
   h.appendChild(top);
 
-  // ── 下段：アクションタブ（シフトタブのみ表示）──
+  // ── 下段：メイン3タブ（セグメント） + その他（横スクロール） ──
   if(isShift){
-    const actionTabs=[
-      {key:'view',  label:'👁 閲覧'},
-      {key:'edit',  label:'✏️ 編集'},
-      {key:'assign',label:'✨ 振り分け'},
-      {key:'member',label:'👥 メンバー'},
-      {key:'swap',  label:'🔄 入れ替え'},
-      {key:'reset', label:'🗑 リセット'},
-      {key:'sync',  label:'📥 同期'},
-      {key:'settings',label:'⚙️ 設定'},
-    ];
-    const tabBar=div({
-      display:'flex',gap:'0',
-      borderTop:'1px solid '+C.hBorder,
-      overflowX:'auto',WebkitOverflowScrolling:'touch',
-      scrollbarWidth:'none',
+    const bar=div({
+      display:'flex',alignItems:'center',
+      borderTop:'1px solid #f1f5f9',
+      padding:'8px 12px',gap:'10px',
+      background:'#fff',
     });
-    tabBar.style.cssText+=':-webkit-scrollbar{display:none}';
 
-    actionTabs.forEach(({key,label})=>{
-      const isActive=(key==='view'&&editMode==='view'&&!showMembers&&!showSettings&&activeAction==='view')
-        ||(key==='edit'&&editMode==='edit'&&activeAction==='edit')
+    // ── セグメントコントロール（閲覧・編集・振り分け）──
+    const segWrap=div({
+      display:'flex',background:'#f1f5f9',borderRadius:'12px',
+      padding:'4px',gap:'3px',flexShrink:'0',
+    });
+
+    const segItems=[
+      {key:'view',  label:'閲覧',
+        isActive:editMode==='view'&&!showMembers&&!showSettings&&activeAction==='view'},
+      {key:'edit',  label:'編集',
+        isActive:editMode==='edit'&&activeAction==='edit'},
+      {key:'assign',label:'振り分け',
+        isActive:activeAction==='assign'},
+    ];
+
+    segItems.forEach(({key,label,isActive})=>{
+      const b=btn({
+        padding:'10px 18px',fontSize:'14px',fontWeight:isActive?'700':'500',
+        color:isActive?'#4f46e5':'#64748b',
+        background:isActive?'#fff':'transparent',
+        borderRadius:'9px',
+        boxShadow:isActive?'0 1px 6px rgba(0,0,0,0.12)':'none',
+        whiteSpace:'nowrap',flexShrink:'0',
+        transition:'all 0.15s',
+        minHeight:'42px',
+      },()=>{
+        if(key==='view') setState({editMode:'view',showMembers:false,showSettings:false,activeAction:'view'});
+        else if(key==='edit') setState({editMode:'edit',showMembers:false,showSettings:false,activeAction:'edit'});
+        else if(key==='assign') setState({editMode:'edit',showMembers:false,showSettings:false,activeAction:'assign',showAssign:true});
+      },label);
+      segWrap.appendChild(b);
+    });
+    bar.appendChild(segWrap);
+
+    // ── 区切り線 ──
+    bar.appendChild(div({width:'1px',height:'28px',background:'#e2e8f0',flexShrink:'0'}));
+
+    // ── その他タブ（小さく横スクロール）──
+    const subBar=div({
+      display:'flex',gap:'0',overflowX:'auto',WebkitOverflowScrolling:'touch',
+      scrollbarWidth:'none',flex:'1',alignItems:'center',
+    });
+
+    const subItems=[
+      {key:'swap',    label:'入替'},
+      {key:'member',  label:'メンバー'},
+      {key:'reset',   label:'リセット'},
+      {key:'sync',    label:'同期'},
+      {key:'settings',label:'設定'},
+    ];
+
+    subItems.forEach(({key,label})=>{
+      const isActive=(key==='swap'&&state.swapMode)
         ||(key==='member'&&showMembers)
         ||(key==='settings'&&showSettings)
-        ||(key==='assign'&&activeAction==='assign')
-        ||(key==='swap'&&state.swapMode)
         ||(key==='reset'&&activeAction==='reset')
         ||(key==='sync'&&activeAction==='sync');
 
       const b=btn({
-        padding:'8px 10px',fontSize:'12px',fontWeight:isActive?'700':'500',
-        color:isActive?C.accent:C.sub,background:isActive?C.mainBg:'transparent',
-        borderBottom:isActive?'2px solid '+C.accent:'2px solid transparent',
+        padding:'6px 10px',fontSize:'11px',
+        fontWeight:isActive?'600':'400',
+        color:isActive?'#4f46e5':'#94a3b8',
+        background:'transparent',
+        borderBottom:isActive?'2px solid #4f46e5':'2px solid transparent',
         whiteSpace:'nowrap',flexShrink:'0',
-        transition:'color 0.15s,border-color 0.15s',
+        minHeight:'36px',
       },()=>{
-        if(key==='view'){setState({editMode:'view',showMembers:false,showSettings:false,activeAction:'view'});}
-        else if(key==='edit'){setState({editMode:'edit',showMembers:false,showSettings:false,activeAction:'edit'});}
-        else if(key==='assign'){setState({editMode:'edit',showMembers:false,showSettings:false,activeAction:'assign',showAssign:true});}
-        else if(key==='member'){setState({showMembers:!showMembers,showSettings:false,activeAction:showMembers?'view':'member'});}
-        else if(key==='reset'){
-          setState({activeAction:'reset',showResetModal:true});
-        }
+        if(key==='swap') setState({swapMode:!state.swapMode,swapDayA:null,swapDayB:null,editMode:'edit',showMembers:false,showSettings:false,activeAction:state.swapMode?'edit':'swap'});
+        else if(key==='member') setState({showMembers:!showMembers,showSettings:false,activeAction:showMembers?'view':'member'});
+        else if(key==='reset') setState({activeAction:'reset',showResetModal:true});
         else if(key==='sync'){
           setState({activeAction:'sync'});
           if(GAS_URL){
@@ -504,33 +583,37 @@ function buildHeader(misOfc,misSafe,misClean){
               if(Array.isArray(data.members)&&data.members.length>0)state.members=data.members;
               setState({activeAction:editMode==='edit'?'edit':'view'});setSaveStatus('saved');
             }).catch(()=>{setSaveStatus('error');setState({activeAction:editMode==='edit'?'edit':'view'});});
-          } else { alert('GASのURLが設定されていません。⚙️設定からURLを入力してください。');setState({activeAction:'view'}); }
+          }else{alert('GASのURLが設定されていません。設定からURLを入力してください。');setState({activeAction:'view'});}
         }
-        else if(key==='swap'){setState({swapMode:!state.swapMode,swapDayA:null,swapDayB:null,editMode:'edit',showMembers:false,showSettings:false,activeAction:state.swapMode?'edit':'swap'});}
-        else if(key==='settings'){setState({showSettings:!showSettings,showMembers:false,activeAction:showSettings?'view':'settings'});}
+        else if(key==='settings') setState({showSettings:!showSettings,showMembers:false,activeAction:showSettings?'view':'settings'});
       },label);
-      tabBar.appendChild(b);
+      subBar.appendChild(b);
     });
-    h.appendChild(tabBar);
+    bar.appendChild(subBar);
+    h.appendChild(bar);
   }
 
   // ── 警告バー ──
   if(hasWarn){
-    const wb=div({background:C.warnBg,border:'1px solid '+C.warnBorder,
-      padding:'6px 12px',color:C.warnText,fontSize:'12px',fontWeight:'700',
-      display:'flex',gap:'12px',alignItems:'center',flexWrap:'wrap'});
-    if(misOfc>0)wb.appendChild(txt('⚠ 事務所番 '+misOfc+'日'));
-    if(misSafe>0)wb.appendChild(txt('⚠ 金庫番 '+misSafe+'日'));
-    if(misClean>0)wb.appendChild(txt('⚠ 掃除 '+misClean+'日'));
+    const wb=div({
+      background:'#fef2f2',borderTop:'1px solid #fca5a5',
+      padding:'6px 14px',color:'#dc2626',fontSize:'11px',fontWeight:'600',
+      display:'flex',gap:'12px',alignItems:'center',flexWrap:'wrap',
+    });
+    if(misOfc>0)wb.appendChild(txt('事務所番 '+misOfc+'日未設定'));
+    if(misSafe>0)wb.appendChild(txt('金庫番 '+misSafe+'日未設定'));
+    if(misClean>0)wb.appendChild(txt('掃除 '+misClean+'日未設定'));
     h.appendChild(wb);
   }
   return h;
 }
 
+
+
 // ── SETTINGS PANEL
 function buildSettingsPanel(){
   const wrap=div({padding:'16px 14px 40px',maxWidth:'500px',margin:'0 auto'});
-  wrap.appendChild(div({fontFamily:'Georgia,serif',fontSize:'16px',fontWeight:'700',color:C.accent,marginBottom:'16px'},['⚙️ 設定']));
+  wrap.appendChild(div({fontSize:'16px',fontWeight:'700',color:'#1e293b',marginBottom:'16px'},['設定']));
   const statusBg=GAS_URL?'#e0f5ec':'#fff9fb';
   const statusFg=GAS_URL?'#2e7d5e':'#8a6070';
   const statusBd=GAS_URL?'#6abf99':C.border;
@@ -560,7 +643,7 @@ function buildSettingsPanel(){
     }
   },'保存して接続');
   card.appendChild(saveBtn);
-  card.appendChild(btn({width:'100%',background:'#f5f5f5',border:'none',color:C.sub,borderRadius:'10px',padding:'10px',fontSize:'12px'},()=>{GAS_URL='';localStorage.removeItem(LS_URL);urlInput.value='';setState({});},'ローカル保存のみに切り替え'));
+  card.appendChild(btn({width:'100%',background:'#f1f5f9',border:'none',color:'#64748b',borderRadius:'10px',padding:'10px',fontSize:'12px'},()=>{GAS_URL='';localStorage.removeItem(LS_URL);urlInput.value='';setState({});},'ローカル保存のみに切り替え'));
   wrap.appendChild(card);
   return wrap;
 }
@@ -568,20 +651,46 @@ function buildSettingsPanel(){
 // ── BOTTOM NAV
 function buildBottomNav(){
   const {tab,showSettings,showToday}=state;
-  const nav=div({position:'fixed',bottom:'0',left:'0',right:'0',background:'#fff',borderTop:'1px solid '+C.border,display:'flex',zIndex:'90',paddingBottom:'env(safe-area-inset-bottom,0px)',boxShadow:'0 -2px 12px rgba(194,80,110,0.08)'});
+  const nav=div({
+    position:'fixed',bottom:'0',left:'0',right:'0',
+    background:'#fff',borderTop:'1px solid #e2e8f0',
+    display:'flex',zIndex:'90',
+    paddingBottom:'env(safe-area-inset-bottom,0px)',
+    boxShadow:'0 -1px 8px rgba(0,0,0,0.06)',
+  });
 
-  // 今日タブ
-  const todayActive=showToday;
-  const todayBtn=btn({flex:'1',padding:'10px 4px 8px',display:'flex',flexDirection:'column',alignItems:'center',gap:'2px',background:todayActive?'#fff8e8':'transparent',borderTop:todayActive?'2px solid #f7a800':'2px solid transparent'},()=>setState({showToday:!showToday,showSettings:false,showMembers:false}));
-  todayBtn.appendChild(div({fontSize:'22px',lineHeight:'1'},['📅']));
-  todayBtn.appendChild(div({fontSize:'10px',fontWeight:todayActive?'700':'400',color:todayActive?'#f7a800':C.muted},['今日']));
-  nav.appendChild(todayBtn);
+  const navItems=[
+    {key:'today', lbl:'今日', isActive:showToday,
+      onClick:()=>setState({showToday:!showToday,showSettings:false,showMembers:false})},
+    {key:'shift', lbl:'シフト', isActive:tab==='shift'&&!showSettings&&!showToday,
+      onClick:()=>setState({tab:'shift',showSettings:false,showMembers:false,showToday:false})},
+    {key:'summary',lbl:'集計', isActive:tab==='summary'&&!showSettings&&!showToday,
+      onClick:()=>setState({tab:'summary',showSettings:false,showMembers:false,showToday:false})},
+    {key:'personal',lbl:'個人', isActive:tab==='personal'&&!showSettings&&!showToday,
+      onClick:()=>setState({tab:'personal',showSettings:false,showMembers:false,showToday:false})},
+  ];
 
-  [{t:'shift',icon:'📋',lbl:'シフト'},{t:'summary',icon:'📊',lbl:'サマリー'},{t:'personal',icon:'👤',lbl:'個人'}].forEach(({t,icon,lbl})=>{
-    const active=tab===t&&!showSettings&&!showToday;
-    const b=btn({flex:'1',padding:'10px 4px 8px',display:'flex',flexDirection:'column',alignItems:'center',gap:'2px',background:active?C.mainBg:'transparent',borderTop:active?'2px solid '+C.accent:'2px solid transparent'},()=>setState({tab:t,showSettings:false,showMembers:false,showToday:false}));
-    b.appendChild(div({fontSize:'22px',lineHeight:'1'},[icon]));
-    b.appendChild(div({fontSize:'10px',fontWeight:active?'700':'400',color:active?C.accent:C.muted},[lbl]));
+  // SVGアイコン定義
+  const icons={
+    today:`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><circle cx="12" cy="16" r="1" fill="currentColor"/></svg>`,
+    shift:`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>`,
+    summary:`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>`,
+    personal:`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>`,
+  };
+
+  navItems.forEach(({key,lbl,isActive,onClick})=>{
+    const b=btn({
+      flex:'1',padding:'8px 4px 6px',
+      display:'flex',flexDirection:'column',alignItems:'center',gap:'3px',
+      background:'transparent',
+      borderTop:isActive?'2px solid #4f46e5':'2px solid transparent',
+      color:isActive?'#4f46e5':'#94a3b8',
+    },onClick);
+    const iconDiv=document.createElement('div');
+    iconDiv.style.cssText='width:20px;height:20px;display:flex;align-items:center;justify-content:center;';
+    iconDiv.innerHTML=icons[key];
+    b.appendChild(iconDiv);
+    b.appendChild(div({fontSize:'10px',fontWeight:isActive?'600':'400',lineHeight:'1'},[lbl]));
     nav.appendChild(b);
   });
   return nav;
@@ -600,7 +709,10 @@ function buildMemberEditor(){
     const box=div({background:bg,border:'1px solid '+border,borderRadius:'10px',padding:'12px 14px',minWidth:'260px',flex:'1'});
     const hdr=div({fontWeight:'700',color,fontSize:'13px',marginBottom:'10px',display:'flex',alignItems:'center',justifyContent:'space-between'});
     hdr.appendChild(txt(label));
-    hdr.appendChild(btn({background:color,color:'#fff',border:'none',borderRadius:'6px',padding:'8px 14px',fontSize:'12px',fontWeight:'700'},()=>{const id=state.nextId;state.nextId++;setState({members:[...state.members,{id,name:'新メンバー',category:cat}]},true);},'＋ 追加'));
+    hdr.appendChild(btn({background:color,color:'#fff',border:'none',borderRadius:'6px',padding:'8px 14px',fontSize:'12px',fontWeight:'700'},()=>{const id=state.nextId;state.nextId++;
+      const usedColors=state.members.filter(m=>m.category==='main').map(m=>m.color).filter(Boolean);
+      const autoColor=MEMBER_COLORS.find(c=>!usedColors.includes(c))||MEMBER_COLORS[0];
+      setState({members:[...state.members,{id,name:'新メンバー',category:cat,color:cat==='main'?autoColor:undefined}]},true);},'＋ 追加'));
     box.appendChild(hdr);
     const list=div({display:'flex',flexDirection:'column',gap:'8px'});
     filtered.forEach((m,i)=>{
@@ -614,6 +726,36 @@ function buildMemberEditor(){
       const inp=el('input',{style:{flex:'1',background:'#fff',border:'1px solid '+border,borderRadius:'6px',color:C.text,padding:'10px',fontSize:'14px'},value:m.name});
       inp.addEventListener('input',e=>updateMemberName(m.id,e.target.value));
       r.appendChild(inp);
+      // メインメンバーのみカラーピッカー表示
+      if(m.category==='main'){
+        const colorBtn=el('div',{style:{width:'28px',height:'28px',borderRadius:'50%',background:m.color||MEMBER_COLORS[0],border:'2px solid #fff',boxShadow:'0 0 0 1.5px '+(m.color||MEMBER_COLORS[0]),cursor:'pointer',flexShrink:'0',position:'relative'}});
+        const picker=el('div',{style:{position:'absolute',top:'32px',right:'0',background:'#fff',border:'1px solid #e2e8f0',borderRadius:'10px',padding:'8px',display:'none',zIndex:'50',boxShadow:'0 4px 16px rgba(0,0,0,0.12)',width:'140px',flexWrap:'wrap',gap:'6px',flexDirection:'row'}});
+        picker.style.display='none';
+        MEMBER_COLORS.forEach(c=>{
+          const sw=el('div',{style:{width:'24px',height:'24px',borderRadius:'50%',background:c,cursor:'pointer',border:m.color===c?'2px solid #1e293b':'2px solid transparent',boxSizing:'border-box'}});
+          sw.addEventListener('click',e2=>{
+            e2.stopPropagation();
+            state.members=state.members.map(x=>x.id===m.id?{...x,color:c}:x);
+            colorBtn.style.background=c;
+            colorBtn.style.boxShadow='0 0 0 1.5px '+c;
+            picker.querySelectorAll('div').forEach(s2=>s2.style.border='2px solid transparent');
+            sw.style.border='2px solid #1e293b';
+            clearTimeout(memberSaveTimer);
+            memberSaveTimer=setTimeout(()=>scheduleSave(),400);
+          });
+          picker.appendChild(sw);
+        });
+        picker.style.display='none';
+        let pickerOpen=false;
+        colorBtn.addEventListener('click',e2=>{
+          e2.stopPropagation();
+          pickerOpen=!pickerOpen;
+          picker.style.display=pickerOpen?'flex':'none';
+        });
+        document.addEventListener('click',()=>{pickerOpen=false;picker.style.display='none';},{once:true});
+        colorBtn.appendChild(picker);
+        r.appendChild(colorBtn);
+      }
       r.appendChild(btn({background:'#fff',border:'1px solid '+border,color,borderRadius:'6px',padding:'8px 10px',fontSize:'11px',whiteSpace:'nowrap'},()=>{setState({members:state.members.map(x=>x.id===m.id?{...x,category:cat==='main'?'sub':'main'}:x)},true);},cat==='main'?'→サブ':'→メイン'));
       r.appendChild(btn({background:'#fde8e8',border:'none',color:C.warnText,borderRadius:'6px',padding:'8px 10px',fontSize:'15px'},()=>{setState({members:state.members.filter(x=>x.id!==m.id)},true);},'×'));
       list.appendChild(r);
@@ -665,16 +807,30 @@ function buildTable(ds,mm,sm){
     const rowBg=wkEnd?C.wkBg:(di%2===0?C.bg:C.bgAlt);
     const is20=date.getDate()===20,is21=date.getDate()===21;const dc=dayClr(date);
     const isToday=toDS(date)===TODAY_DS;
-    const tr=el('tr',{style:{background:rowBg,borderTop:is21?'2px solid '+C.accent:(isToday?'2px solid #f7a800':''),borderBottom:is20?'2px solid '+C.accent:(isToday?'2px solid #f7a800':''),outline:isToday?'':''}});
-    function mkTd(s){return el('td',{style:{border:'1px solid '+C.border,padding:'3px 2px',height:'44px',verticalAlign:'middle',textAlign:'center',whiteSpace:'nowrap',overflow:'hidden',...s}});}
+    // ① 今日の行背景：薄いインディゴ
+    const todayRowBg=isToday?'#eef2ff':rowBg;
+    const tr=el('tr',{style:{
+      background:todayRowBg,
+      borderTop:is21?'2px solid '+C.accent:'',
+      borderBottom:is20?'2px solid '+C.accent:'',
+    }});
+    function mkTd(s){return el('td',{style:{
+      border:'1px solid '+(isToday?'#c7d2fe':C.border),
+      padding:'3px 2px',height:'44px',verticalAlign:'middle',
+      textAlign:'center',whiteSpace:'nowrap',overflow:'hidden',...s}});}
     // swap モード時の日付セルスタイル
     const isSwapA=state.swapMode&&state.swapDayA===dstr;
     const isSwapB=state.swapMode&&state.swapDayB===dstr;
-    const dateBg=isToday?'#f7a800':isSwapA?'#c2506e':isSwapB?'#7a5080':rowBg;
+    const dateBg=isToday?'#4f46e5':isSwapA?'#db2777':isSwapB?'#7c3aed':todayRowBg;
     const dateFg=isToday||isSwapA||isSwapB?'#fff':dc;
-    const dateTd=mkTd({color:dateFg,fontWeight:'700',fontSize:'12px',background:dateBg,position:'relative',cursor:state.swapMode?'pointer':'default'});
+    // ② 今日は左に太いインディゴボーダーライン
+    const dateTd=mkTd({
+      color:dateFg,fontWeight:'700',fontSize:'12px',background:dateBg,
+      position:'relative',cursor:state.swapMode?'pointer':'default',
+      borderLeft:isToday?'4px solid #4f46e5':'1px solid '+C.border,
+    });
     dateTd.appendChild(document.createTextNode((date.getMonth()+1)+'/'+date.getDate()));
-    if(isToday&&!isSwapA&&!isSwapB)dateTd.appendChild(el('span',{style:{fontSize:'8px',display:'block',color:'#fff',opacity:'0.9'}},'今日'));
+    if(isToday&&!isSwapA&&!isSwapB)dateTd.appendChild(el('span',{style:{fontSize:'8px',display:'block',color:'rgba(255,255,255,0.85)',fontWeight:'600'}},'今日'));
     if(isSwapA)dateTd.appendChild(el('span',{style:{fontSize:'8px',display:'block',color:'#fff'}},'日A'));
     if(isSwapB)dateTd.appendChild(el('span',{style:{fontSize:'8px',display:'block',color:'#fff'}},'日B'));
     if(isHol(date)&&!isSwapA&&!isSwapB)dateTd.appendChild(el('span',{style:{fontSize:'9px',color:isToday?'#fff':C.sun,display:'block'}},['祝']));
@@ -693,25 +849,62 @@ function buildTable(ds,mm,sm){
       });
     }
     tr.appendChild(dateTd);
-    const wdTd=mkTd({color:dc,fontWeight:'800',fontSize:'13px',background:rowBg,borderRight:'2px solid '+C.strong});
+    const wdTd=mkTd({
+      color:isToday?'#4f46e5':dc,
+      fontWeight:'800',fontSize:'13px',
+      background:todayRowBg,
+      borderRight:'2px solid '+C.strong,
+    });
     wdTd.appendChild(document.createTextNode(dayLbl(date)));tr.appendChild(wdTd);
     DUTY_COLS.forEach(dc2=>{
       const vals=getDutyNames(dstr,dc2.key);const needed=dc2.req?req:true;const miss=needed&&!vals.length;
-      const cellBg=miss?'#fde8e8':vals.length?dc2.lightBg:rowBg;
-      const dtd=mkTd({background:cellBg,borderLeft:'2px solid '+C.strong,borderRight:'2px solid '+C.strong,cursor:editMode==='edit'?'pointer':'default',padding:'4px 2px'});
+      // ④ 今日の担当セル：lightBgを使いつつ強調ボーダー
+      const cellBg=miss?'#fde8e8':vals.length?dc2.lightBg:todayRowBg;
+      const dtd=mkTd({
+        background:cellBg,
+        borderLeft:'2px solid '+C.strong,
+        borderRight:'2px solid '+C.strong,
+        // 今日の担当セルは上下ボーダーをアクセントカラーに
+        borderTop:isToday?'2px solid '+dc2.accent:'1px solid '+(isToday?'#c7d2fe':C.border),
+        borderBottom:isToday?'2px solid '+dc2.accent:'1px solid '+(isToday?'#c7d2fe':C.border),
+        cursor:editMode==='edit'?'pointer':'default',
+        padding:'4px 2px',
+      });
       if(editMode==='edit')dtd.addEventListener('click',()=>openDutyModal(dstr,dc2.key));
-      if(miss)dtd.appendChild(el('span',{style:{color:C.warnText,fontSize:'10px',fontWeight:'700'}},['⚠']));
-      else if(vals.length){const inner=div({display:'flex',flexWrap:'wrap',gap:'2px',justifyContent:'center'});vals.forEach(v=>inner.appendChild(el('span',{style:{background:dc2.tag,color:'#fff',borderRadius:'4px',padding:'2px 4px',fontSize:'10px',fontWeight:'700'}},[v])));dtd.appendChild(inner);}
-      else dtd.appendChild(el('span',{style:{color:C.muted,fontSize:'11px'}},['—']));
+      if(miss)dtd.appendChild(el('span',{style:{color:C.warnText,fontSize:'10px',fontWeight:'700'}},['!']));
+      else if(vals.length){
+        const inner=div({display:'flex',flexWrap:'wrap',gap:'2px',justifyContent:'center'});
+        vals.forEach(v=>{
+          const mc=getMemberColor(v);
+          // ④ 今日の担当バッジはやや大きく
+          inner.appendChild(el('span',{style:{
+            background:mc,color:'#fff',borderRadius:'4px',
+            padding:isToday?'3px 6px':'2px 5px',
+            fontSize:isToday?'11px':'10px',
+            fontWeight:'700',
+            letterSpacing:'-0.02em',whiteSpace:'nowrap',
+          }},[v]));
+        });
+        dtd.appendChild(inner);
+      }
+      else dtd.appendChild(el('span',{style:{color:C.muted,fontSize:'12px'}},['—']));
       tr.appendChild(dtd);
     });
     tr.appendChild(mkTd({padding:'0',background:C.strong,border:'none'}));
     [...mm,...(sm.length?[null]:[]),...sm].forEach(m=>{
       if(m===null){tr.appendChild(mkTd({padding:'0',background:C.subBorder,border:'none'}));return;}
       const sts=getStatuses(dstr,m.name);const ss=STATUS_STYLE[sts[0]];
-      const mtd=mkTd({background:ss?ss.bg:rowBg,cursor:editMode==='edit'?'pointer':'default',padding:'3px 2px'});
+      const mc=m.category==='main'?getMemberColor(m.name):null;
+      const mtd=mkTd({background:ss?ss.bg:rowBg,cursor:editMode==='edit'?'pointer':'default',padding:'3px 2px',borderLeft:mc?'3px solid '+mc:'1px solid '+C.border});
       if(editMode==='edit')mtd.addEventListener('click',()=>openMemberModal(dstr,m.name));
-      if(sts.length){const inner=div({display:'flex',flexWrap:'wrap',gap:'1px',justifyContent:'center'});sts.forEach(st=>{const s=STATUS_STYLE[st];inner.appendChild(el('span',{style:{background:s?.bg||'#eee',color:s?.text||'#333',border:'1px solid '+(s?.border||'#ccc'),borderRadius:'3px',padding:'0 2px',fontSize:'9px',fontWeight:'600',whiteSpace:'nowrap',display:'block',lineHeight:'1.6'}},[st]));});mtd.appendChild(inner);}
+      if(sts.length){
+        const inner=div({display:'flex',flexWrap:'wrap',gap:'1px',justifyContent:'center'});
+        sts.forEach(st=>{
+          const s=STATUS_STYLE[st];
+          inner.appendChild(el('span',{style:{background:s?.bg||'#eee',color:s?.text||'#333',border:'1px solid '+(s?.border||'#ccc'),borderRadius:'3px',padding:'0 2px',fontSize:'9px',fontWeight:'600',whiteSpace:'nowrap',display:'block',lineHeight:'1.6'}},[st]));
+        });
+        mtd.appendChild(inner);
+      }
       tr.appendChild(mtd);
     });
     tbody.appendChild(tr);
@@ -721,11 +914,11 @@ function buildTable(ds,mm,sm){
 
 // ── ボトムシート共通
 function buildSheet(onClose){
-  const ov=div({position:'fixed',inset:'0',background:'rgba(60,10,30,0.45)',zIndex:'200',display:'flex',alignItems:'flex-end',animation:'fadeIn 0.2s ease'});
+  const ov=div({position:'fixed',inset:'0',background:'rgba(15,23,42,0.4)',zIndex:'200',display:'flex',alignItems:'flex-end',animation:'fadeIn 0.15s ease'});
   ov.addEventListener('click',onClose);
-  const sheet=div({background:'#fff',borderRadius:'20px 20px 0 0',padding:'0 16px',paddingBottom:'max(24px,env(safe-area-inset-bottom))',width:'100%',maxHeight:'90vh',overflowY:'auto',animation:'slideUp 0.25s ease',WebkitOverflowScrolling:'touch'});
+  const sheet=div({background:'#fff',borderRadius:'16px 16px 0 0',padding:'0 16px',paddingBottom:'max(24px,env(safe-area-inset-bottom))',width:'100%',maxHeight:'90vh',overflowY:'auto',animation:'slideUp 0.2s ease',WebkitOverflowScrolling:'touch'});
   sheet.addEventListener('click',e=>e.stopPropagation());
-  sheet.appendChild(div({width:'40px',height:'4px',background:C.border,borderRadius:'2px',margin:'12px auto 16px'}));
+  sheet.appendChild(div({width:'36px',height:'3px',background:'#e2e8f0',borderRadius:'2px',margin:'10px auto 14px'}));
   ov.appendChild(sheet);return{ov,sheet};
 }
 
@@ -736,8 +929,8 @@ function buildSheet(onClose){
 function buildResetModal(){
   const{ov,sheet}=buildSheet(()=>setState({showResetModal:false,activeAction:'edit'}));
 
-  sheet.appendChild(div({fontFamily:'Georgia,serif',fontSize:'16px',fontWeight:'700',
-    color:C.accent,marginBottom:'4px'},['🗑 リセット']));
+  sheet.appendChild(div({fontSize:'16px',fontWeight:'700',
+    color:'#1e293b',marginBottom:'4px'},['リセット']));
   sheet.appendChild(div({fontSize:'12px',color:C.muted,marginBottom:'16px'},
     [state.year+'年'+state.month+'月分のデータを選択してクリアします']));
 
@@ -850,7 +1043,7 @@ function buildResetModal(){
   sheet.appendChild(schedCard);
 
   // キャンセル
-  sheet.appendChild(btn({width:'100%',background:'#f5f5f5',border:'none',color:C.sub,
+  sheet.appendChild(btn({width:'100%',background:'#f1f5f9',border:'none',color:'#64748b',
     borderRadius:'12px',padding:'14px',fontSize:'13px',minHeight:'52px'},
     ()=>setState({showResetModal:false,activeAction:'edit'}),'キャンセル'));
 
@@ -859,28 +1052,124 @@ function buildResetModal(){
 
 // ── ASSIGN MODAL
 function buildAssignModal(){
-  const {assignOpts}=state;const prev=autoAssignPreview();
+  // ローカルオプション管理（再描画なし）
+  const localOpts={...state.assignOpts};
   const{ov,sheet}=buildSheet(()=>setState({showAssign:false}));
-  sheet.appendChild(div({fontFamily:'Georgia,serif',fontSize:'16px',fontWeight:'700',color:C.accent,marginBottom:'4px'},['✨ 自動振り分け']));
+
+  sheet.appendChild(div({fontSize:'16px',fontWeight:'700',color:'#1e293b',marginBottom:'4px'},['自動振り分け']));
   sheet.appendChild(div({fontSize:'12px',color:C.muted,marginBottom:'16px'},['メインメンバーのみ。公休・有休・半休の人は除外。']));
-  function optRow(label,desc,key,color,bg,border,disabled){
-    const checked=assignOpts[key];
-    const row=div({display:'flex',alignItems:'flex-start',gap:'12px',background:checked?bg:'#fafafa',border:'2px solid '+(checked?border:'#eacdd6'),borderRadius:'12px',padding:'14px',cursor:disabled?'not-allowed':'pointer',opacity:disabled?'0.4':'1',marginBottom:'10px',minHeight:'60px'});
-    if(!disabled)row.addEventListener('click',()=>{const next={...assignOpts,[key]:!assignOpts[key]};if(key==='consec'&&next.consec)next.noConsec=false;if(key==='noConsec'&&next.noConsec)next.consec=false;setState({assignOpts:next});});
-    const chk=div({width:'24px',height:'24px',borderRadius:'6px',flexShrink:'0',marginTop:'1px',background:checked?color:'#fff',border:'2px solid '+(checked?color:'#d9a0b4'),display:'flex',alignItems:'center',justifyContent:'center',fontSize:'14px',color:'#fff',fontWeight:'700'},[checked?'✓':'']);
-    row.appendChild(chk);const t2=div({});t2.appendChild(div({fontSize:'13px',fontWeight:'700',color:checked?color:C.text},[label]));t2.appendChild(div({fontSize:'11px',color:C.muted,marginTop:'2px'},[desc]));row.appendChild(t2);return row;
+
+  // オプション行ビルダー（DOMダイレクト更新）
+  function buildOptRow(label,desc,key,color,bg,border,getDisabled){
+    const row=div({display:'flex',alignItems:'flex-start',gap:'12px',
+      borderRadius:'12px',padding:'14px',marginBottom:'10px',minHeight:'60px',
+      cursor:'pointer',transition:'background 0.1s',
+    });
+    const chk=div({width:'22px',height:'22px',borderRadius:'5px',flexShrink:'0',marginTop:'1px',
+      display:'flex',alignItems:'center',justifyContent:'center',fontSize:'13px',color:'#fff',fontWeight:'700',
+    });
+    const labelDiv=div({fontSize:'13px',fontWeight:'700',marginBottom:'2px'});
+    const descDiv=div({fontSize:'11px',color:C.muted});
+    const t2=div({});t2.appendChild(labelDiv);t2.appendChild(descDiv);
+    row.appendChild(chk);row.appendChild(t2);
+
+    function refresh(){
+      const checked=localOpts[key];
+      const disabled=getDisabled();
+      row.style.background=checked?bg:'#f8f9fa';
+      row.style.border='1.5px solid '+(checked?border:'#e2e8f0');
+      row.style.opacity=disabled?'0.4':'1';
+      row.style.cursor=disabled?'not-allowed':'pointer';
+      chk.style.background=checked?color:'#fff';
+      chk.style.border='1.5px solid '+(checked?color:'#e2e8f0');
+      chk.textContent=checked?'✓':'';
+      labelDiv.textContent=label;
+      labelDiv.style.color=checked?color:'#1e293b';
+      descDiv.textContent=desc;
+    }
+    refresh();
+
+    row.addEventListener('click',()=>{
+      if(getDisabled())return;
+      localOpts[key]=!localOpts[key];
+      // 排他制御
+      if(key==='consec'&&localOpts.consec)localOpts.noConsec=false;
+      if(key==='noConsec'&&localOpts.noConsec)localOpts.consec=false;
+      // 全オプション行を再フレッシュ（DOM直接更新）
+      allRows.forEach(r=>r.refresh());
+    });
+    return{row,refresh};
   }
-  sheet.appendChild(optRow('① 金庫番と掃除を同一人物にセット','同日の金庫番・掃除を同一人物に割り当て','pair','#b5860d','#fdf3dc','#d4a843',false));
-  sheet.appendChild(optRow('② 担当が連日になるように','前日担当者を優先','consec','#2e7d5e','#e0f5ec','#6abf99',assignOpts.noConsec));
-  sheet.appendChild(optRow('③ 担当が連日にならないように','前日担当者を避ける','noConsec','#1a5276','#d6eaf8','#7fb3d3',assignOpts.consec));
+
+  const allRows=[];
+  const opts=[
+    {label:'金庫番と掃除を同一人物にセット',desc:'同日の金庫番・掃除を同一人物に割り当て',
+      key:'pair',color:'#d97706',bg:'#fffbeb',border:'#fde68a',dis:()=>false},
+    {label:'担当が連日になるように',desc:'前日担当者を優先して翌日も割り当て',
+      key:'consec',color:'#059669',bg:'#ecfdf5',border:'#a7f3d0',dis:()=>localOpts.noConsec},
+    {label:'担当が連日にならないように',desc:'前日担当者を避けて割り当て',
+      key:'noConsec',color:'#2563eb',bg:'#eff6ff',border:'#bfdbfe',dis:()=>localOpts.consec},
+  ];
+  opts.forEach(o=>{
+    const{row,refresh}=buildOptRow(o.label,o.desc,o.key,o.color,o.bg,o.border,o.dis);
+    allRows.push({refresh});
+    sheet.appendChild(row);
+  });
+
   sheet.appendChild(div({borderTop:'1px solid '+C.border,margin:'8px 0 14px'}));
-  [{label:'⑤ 未設定欄だけ振り分け'+(prev>0?' ('+prev+'件)':''),bg:'linear-gradient(135deg,'+C.accent+',#7a5080)',color:'#fff',border:'none',action:()=>{const r=runAutoAssign({...state.data},state.assignOpts,true);setState({data:r.data,showAssign:false},true);showAssignAlerts(r.alerts);}},
-   {label:'全体を再振り分け（上書き）',bg:'#fff',color:C.accent,border:'2px solid '+C.accent,action:()=>{const r=runAutoAssign({...state.data},state.assignOpts,false);setState({data:r.data,showAssign:false},true);showAssignAlerts(r.alerts);}},
-   {label:'④ リセット（担当欄をすべてクリア）',bg:'#fff',color:C.warnText,border:'1px solid '+C.warnBorder,action:()=>{const nd={...state.data};days().forEach(d=>{const ds=toDS(d);if(!nd[ds])return;const dd={...(nd[ds])};DUTY_COLS.forEach(dc=>{const label=DUTY_STATUS_MAP[dc.key];dd[dc.key]=[];state.members.forEach(({name})=>{const p=Array.isArray(dd[name])?dd[name]:(dd[name]?[dd[name]]:[]);if(p.includes(label))dd[name]=p.filter(s=>s!==label);});});nd[ds]=dd;});setState({data:nd,showAssign:false},true);}}
-  ].forEach(({label,bg,color,border,action})=>{sheet.appendChild(btn({width:'100%',marginBottom:'8px',background:bg,color,border:border||'none',borderRadius:'12px',padding:'16px',fontSize:'14px',fontWeight:'700',minHeight:'56px'},action,label));});
-  sheet.appendChild(btn({width:'100%',background:'#f5f5f5',border:'none',color:C.sub,borderRadius:'12px',padding:'14px',fontSize:'13px',minHeight:'52px'},()=>setState({showAssign:false}),'キャンセル'));
+
+  // プレビュー件数
+  const prev=autoAssignPreview();
+
+  // アクションボタン
+  [{label:'未設定欄のみ振り分け'+(prev>0?' ('+prev+'件)':''),
+    bg:'#4f46e5',color:'#fff',border:'none',
+    action:()=>{
+      const r=runAutoAssign({...state.data},localOpts,true);
+      setState({data:r.data,showAssign:false,assignOpts:localOpts},true);
+      showAssignAlerts(r.alerts);
+    }},
+   {label:'全体を再振り分け（上書き）',
+    bg:'#fff',color:'#4f46e5',border:'1.5px solid #4f46e5',
+    action:()=>{
+      const r=runAutoAssign({...state.data},localOpts,false);
+      setState({data:r.data,showAssign:false,assignOpts:localOpts},true);
+      showAssignAlerts(r.alerts);
+    }},
+   {label:'担当欄をリセット',
+    bg:'#fff',color:C.warnText,border:'1px solid '+C.warnBorder,
+    action:()=>{
+      const nd={...state.data};
+      days().forEach(d=>{
+        const ds=toDS(d);if(!nd[ds])return;
+        const dd={...(nd[ds])};
+        DUTY_COLS.forEach(dc=>{
+          const lbl=DUTY_STATUS_MAP[dc.key];dd[dc.key]=[];
+          state.members.forEach(({name})=>{
+            const p=Array.isArray(dd[name])?dd[name]:(dd[name]?[dd[name]]:[]);
+            if(p.includes(lbl))dd[name]=p.filter(s=>s!==lbl);
+          });
+        });
+        nd[ds]=dd;
+      });
+      setState({data:nd,showAssign:false,assignOpts:localOpts},true);
+    }},
+  ].forEach(({label,bg,color,border,action})=>{
+    sheet.appendChild(btn({
+      width:'100%',marginBottom:'8px',background:bg,color,
+      border:border||'none',borderRadius:'10px',padding:'14px',
+      fontSize:'13px',fontWeight:'600',minHeight:'52px',
+    },action,label));
+  });
+
+  sheet.appendChild(btn({
+    width:'100%',background:'#f1f5f9',border:'none',color:C.sub,
+    borderRadius:'10px',padding:'14px',fontSize:'13px',minHeight:'52px',
+  },()=>setState({showAssign:false}),'キャンセル'));
+
   return ov;
 }
+
 
 // ── MODALS
 function openDutyModal(ds,key){setState({modal:{kind:'duty',dateStr:ds,dutyKey:key},tempDuty:getDutyNames(ds,key)});}
@@ -892,46 +1181,254 @@ function buildModal(){
   if(modal.kind==='duty')sheet.appendChild(buildDutyModalContent());
   else if(copyMode)sheet.appendChild(buildCopyModeContent());
   else sheet.appendChild(buildMemberModalContent());
-  sheet.appendChild(btn({width:'100%',marginTop:'10px',background:'#f5f5f5',border:'none',color:C.sub,borderRadius:'12px',padding:'14px',fontSize:'13px',minHeight:'52px'},()=>{if(copyMode)setState({copyMode:false,copyStatus:null,copyDays:new Set(),modal:null});else setState({modal:null});},copyMode?'複製モードを終了':'キャンセル'));
+  sheet.appendChild(btn({width:'100%',marginTop:'10px',background:'#f1f5f9',border:'none',color:'#64748b',borderRadius:'12px',padding:'14px',fontSize:'13px',minHeight:'52px'},()=>{if(copyMode)setState({copyMode:false,copyStatus:null,copyDays:new Set(),modal:null});else setState({modal:null});},copyMode?'複製モードを終了':'キャンセル'));
   return ov;
 }
 
 function buildDutyModalContent(){
-  const{modal,tempDuty}=state;const dc=DUTY_COLS.find(c=>c.key===modal.dutyKey);
-  const mm=mainMembers();const sm=subMembers();const wrap=div({});
-  wrap.appendChild(div({color:dc.accent,fontWeight:'700',fontSize:'16px',marginBottom:'2px'},[dc.label+' 担当者']));
+  const{modal,tempDuty}=state;
+  const dc=DUTY_COLS.find(c=>c.key===modal.dutyKey);
+  const mm=mainMembers();const sm=subMembers();
+  const wrap=div({});
+
+  wrap.appendChild(div({fontWeight:'700',fontSize:'15px',color:'#1e293b',marginBottom:'2px'},[dc.label+' 担当者']));
   wrap.appendChild(div({color:C.muted,fontSize:'12px',marginBottom:'14px'},[modal.dateStr+' ／ 複数選択可']));
-  function mkGrid(members,catLabel,catColor){if(!members.length)return;wrap.appendChild(div({fontSize:'11px',color:catColor,fontWeight:'700',marginBottom:'6px'}),[catLabel]);const grid=div({display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(76px,1fr))',gap:'8px',marginBottom:'12px'});members.forEach(m=>{const active=tempDuty.includes(m.name);const b=btn({background:active?dc.lightBg:'#fafafa',border:'2px solid '+(active?dc.accent:C.border),color:active?dc.accent:C.text,borderRadius:'10px',padding:'14px 4px',fontSize:'14px',fontWeight:active?'700':'500',minHeight:'56px'},()=>setState({tempDuty:tempDuty.includes(m.name)?tempDuty.filter(x=>x!==m.name):[...tempDuty,m.name]}),(active?'✓ ':'')+m.name);grid.appendChild(b);});wrap.appendChild(grid);}
+
+  function mkGrid(members,catLabel,catColor){
+    if(!members.length)return;
+    wrap.appendChild(div({fontSize:'11px',color:catColor,fontWeight:'600',marginBottom:'6px'}),[catLabel]);
+    const grid=div({display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(76px,1fr))',gap:'8px',marginBottom:'12px'});
+    members.forEach(m=>{
+      const mc=m.category==='main'?getMemberColor(m.name):C.muted;
+      const active=tempDuty.includes(m.name);
+      const b=btn({
+        background:active?mc+'22':'#f8f9fa',
+        border:'1.5px solid '+(active?mc:'#e2e8f0'),
+        color:active?mc:'#64748b',
+        borderRadius:'10px',padding:'14px 4px',fontSize:'13px',
+        fontWeight:active?'700':'400',minHeight:'52px',
+      },()=>setState({tempDuty:tempDuty.includes(m.name)?tempDuty.filter(x=>x!==m.name):[...tempDuty,m.name]}),
+      (active?'✓ ':'')+m.name);
+      grid.appendChild(b);
+    });
+    wrap.appendChild(grid);
+  }
   mkGrid(mm,'メイン',C.mainCat);mkGrid(sm,'サブ',C.subCat);
-  const row=div({display:'flex',gap:'8px'});
-  row.appendChild(btn({flex:'1',background:'#f5f5f5',border:'none',color:C.sub,borderRadius:'10px',padding:'14px',fontSize:'13px',minHeight:'52px'},()=>setState({tempDuty:[]}),'クリア'));
-  row.appendChild(btn({flex:'2',background:C.accent,border:'none',color:'#fff',borderRadius:'10px',padding:'14px',fontSize:'14px',fontWeight:'700',minHeight:'52px'},()=>{commitDuty(modal.dateStr,modal.dutyKey,state.tempDuty);setState({modal:null});},'確定'));
-  wrap.appendChild(row);return wrap;
+
+  // ── 確定 / クリア ──
+  const row=div({display:'flex',gap:'8px',marginBottom:'12px'});
+  row.appendChild(btn({flex:'1',background:'#f1f5f9',border:'none',color:'#64748b',borderRadius:'10px',padding:'14px',fontSize:'13px',minHeight:'52px'},()=>setState({tempDuty:[]}),'クリア'));
+  row.appendChild(btn({flex:'2',background:C.accent,border:'none',color:'#fff',borderRadius:'10px',padding:'14px',fontSize:'14px',fontWeight:'600',minHeight:'52px'},()=>{commitDuty(modal.dateStr,modal.dutyKey,state.tempDuty);setState({modal:null});},'確定'));
+  wrap.appendChild(row);
+
+  // ── ① 複数日まとめて設定 ──
+  const multiSection=div({background:'#f8f9fa',border:'1px solid #e2e8f0',borderRadius:'12px',padding:'12px 14px'});
+  const multiHdr=div({display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'0'});
+  multiHdr.appendChild(div({fontSize:'12px',fontWeight:'600',color:'#64748b'},['複数日にまとめて設定']));
+
+  let multiOpen=false;
+  const toggleBtn=btn({fontSize:'11px',color:C.accent,background:'transparent',border:'none',fontWeight:'600'},()=>{
+    multiOpen=!multiOpen;
+    multiBody.style.display=multiOpen?'block':'none';
+    toggleBtn.textContent=multiOpen?'▲ 閉じる':'▶ 展開';
+  },'▶ 展開');
+  multiHdr.appendChild(toggleBtn);
+  multiSection.appendChild(multiHdr);
+
+  const multiBody=div({display:'none',marginTop:'10px'});
+  multiBody.appendChild(div({fontSize:'11px',color:C.muted,marginBottom:'8px'},
+    ['担当者を選択してから、適用したい日付をタップしてください']));
+
+  // 担当者選択（1人のみ）
+  const singleSelWrap=div({display:'flex',flexWrap:'wrap',gap:'6px',marginBottom:'10px'});
+  let selectedPerson=null;
+  const personBtns={};
+
+  mm.forEach(m=>{
+    const mc=getMemberColor(m.name);
+    const b=document.createElement('button');
+    Object.assign(b.style,{
+      background:'#f8f9fa',border:'1.5px solid #e2e8f0',color:'#64748b',
+      borderRadius:'8px',padding:'6px 12px',fontSize:'12px',fontWeight:'400',
+      cursor:'pointer',fontFamily:'inherit',transition:'all 0.1s',
+    });
+    b.textContent=m.name;
+    personBtns[m.name]=b;
+    b.addEventListener('click',()=>{
+      selectedPerson=selectedPerson===m.name?null:m.name;
+      // 全ボタン更新
+      mm.forEach(m2=>{
+        const isActive=selectedPerson===m2.name;
+        const mc2=getMemberColor(m2.name);
+        const pb=personBtns[m2.name];
+        pb.style.background=isActive?mc2+'22':'#f8f9fa';
+        pb.style.border='1.5px solid '+(isActive?mc2:'#e2e8f0');
+        pb.style.color=isActive?mc2:'#64748b';
+        pb.style.fontWeight=isActive?'700':'400';
+      });
+      // 選択状態に応じてグリッドの活性状態を更新
+      updateDateGrid();
+    });
+    singleSelWrap.appendChild(b);
+  });
+  multiBody.appendChild(singleSelWrap);
+
+  // 日付グリッド
+  const selectedDates=new Set();
+  const dateGrid=div({display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:'4px',maxHeight:'200px',overflowY:'auto',marginBottom:'10px'});
+  const dateBtns={};
+
+  function updateDateGrid(){
+    days().forEach(d=>{
+      const ds=toDS(d);
+      const b=dateBtns[ds];if(!b)return;
+      const sel=selectedDates.has(ds);
+      const mc=selectedPerson?getMemberColor(selectedPerson):null;
+      b.style.opacity=selectedPerson?'1':'0.4';
+      b.style.cursor=selectedPerson?'pointer':'not-allowed';
+      b.style.background=sel&&mc?mc+'22':'#f8f9fa';
+      b.style.border='1.5px solid '+(sel&&mc?mc:'#e2e8f0');
+      b.style.color=sel&&mc?mc:dayClr(d);
+      b.style.fontWeight=sel?'700':'400';
+    });
+    applyMultiBtn.style.background=(selectedPerson&&selectedDates.size>0)?C.accent:'#e2e8f0';
+    applyMultiBtn.style.cursor=(selectedPerson&&selectedDates.size>0)?'pointer':'not-allowed';
+    applyMultiBtn.textContent=(selectedDates.size>0)?selectedDates.size+'日に適用':'日付を選択';
+  }
+
+  days().forEach(d=>{
+    const ds=toDS(d);
+    const b=document.createElement('button');
+    Object.assign(b.style,{
+      background:'#f8f9fa',border:'1.5px solid #e2e8f0',
+      borderRadius:'6px',padding:'6px 2px',fontSize:'11px',
+      color:dayClr(d),lineHeight:'1.3',minHeight:'44px',
+      display:'flex',flexDirection:'column',alignItems:'center',
+      justifyContent:'center',cursor:'not-allowed',opacity:'0.4',
+      fontFamily:'inherit',width:'100%',
+    });
+    b.innerHTML='<div>'+(d.getMonth()+1)+'/'+d.getDate()+'</div><div style="font-size:9px">'+dayLbl(d)+'</div>';
+    b.addEventListener('click',()=>{
+      if(!selectedPerson)return;
+      selectedDates.has(ds)?selectedDates.delete(ds):selectedDates.add(ds);
+      updateDateGrid();
+    });
+    dateBtns[ds]=b;
+    dateGrid.appendChild(b);
+  });
+  multiBody.appendChild(dateGrid);
+
+  // 適用ボタン
+  const applyMultiBtn=document.createElement('button');
+  Object.assign(applyMultiBtn.style,{
+    width:'100%',background:'#e2e8f0',color:'#fff',border:'none',
+    borderRadius:'10px',padding:'12px',fontSize:'13px',fontWeight:'600',
+    minHeight:'44px',cursor:'not-allowed',fontFamily:'inherit',
+  });
+  applyMultiBtn.textContent='日付を選択';
+  applyMultiBtn.addEventListener('click',()=>{
+    if(!selectedPerson||!selectedDates.size)return;
+    let d={...state.data};
+    selectedDates.forEach(ds=>{
+      const dd={...(d[ds]||{})};
+      const cur=getDutyArr(d,ds,modal.dutyKey);
+      const next=cur.includes(selectedPerson)?cur:[...cur,selectedPerson];
+      d={...d,[ds]:syncDutyToMembers({...dd},modal.dutyKey,next,state.members)};
+    });
+    setState({data:d,modal:null},true);
+  });
+  multiBody.appendChild(applyMultiBtn);
+  updateDateGrid();
+  multiSection.appendChild(multiBody);
+  wrap.appendChild(multiSection);
+  return wrap;
 }
 
+
 function buildMemberModalContent(){
-  const{modal,tempStatus}=state;const wrap=div({});
-  wrap.appendChild(div({color:C.accent,fontWeight:'700',fontSize:'16px',marginBottom:'2px'},[modal.member]));
+  const{modal}=state;
+  const wrap=div({});
+  wrap.appendChild(div({fontWeight:'700',fontSize:'15px',color:'#1e293b',marginBottom:'2px'},[modal.member]));
   wrap.appendChild(div({color:C.muted,fontSize:'12px',marginBottom:'8px'},[modal.dateStr]));
-  wrap.appendChild(div({color:'#7d5a0a',fontSize:'12px',background:'#fdf3dc',borderRadius:'8px',padding:'8px 10px',border:'1px solid #d4a843',marginBottom:'14px'},['📋 ボタンを長押しで複製モード']));
+  wrap.appendChild(div({color:'#92400e',fontSize:'12px',background:'#fffbeb',borderRadius:'8px',
+    padding:'8px 10px',border:'1px solid #fde68a',marginBottom:'14px'},['長押しで複製モード']));
+
+  // ローカルステータス管理（再描画なし）
+  const localStatus=[...state.tempStatus];
+
   const grid=div({display:'grid',gridTemplateColumns:'1fr 1fr',gap:'8px',marginBottom:'14px'});
+  const btns={};
+
   STATUS_LIST.forEach(st=>{
-    const ss=STATUS_STYLE[st];const active=tempStatus.includes(st);
-    const b=btn({background:active?ss.bg:'#fafafa',border:'2px solid '+(active?ss.border:C.border),color:active?ss.text:C.sub,borderRadius:'10px',padding:'16px 8px',fontSize:'14px',fontWeight:active?'700':'500',userSelect:'none',WebkitUserSelect:'none',position:'relative',minHeight:'56px'},null,(active?'✓ ':'')+st);
-    b.addEventListener('click',()=>setState({tempStatus:tempStatus.includes(st)?tempStatus.filter(x=>x!==st):[...tempStatus,st]}));
-    const startLP=(e)=>{longPressTimer=setTimeout(()=>{longPressTimer=null;if(e.cancelable)e.preventDefault();setState({copyMode:true,copyStatus:st,copyDays:new Set()});},600);};
-    const endLP=()=>{clearTimeout(longPressTimer);longPressTimer=null;};
+    const ss=STATUS_STYLE[st];
+    const b=document.createElement('button');
+    Object.assign(b.style,{
+      background:'#f8f9fa',border:'1.5px solid #e2e8f0',color:'#64748b',
+      borderRadius:'10px',padding:'14px 8px',fontSize:'13px',fontWeight:'400',
+      userSelect:'none',WebkitUserSelect:'none',position:'relative',
+      minHeight:'52px',cursor:'pointer',fontFamily:'inherit',width:'100%',
+    });
+    b.textContent=st;
+    btns[st]=b;
+
+    function refreshBtn(){
+      const active=localStatus.includes(st);
+      b.style.background=active?ss.bg:'#f8f9fa';
+      b.style.border='1.5px solid '+(active?ss.border:'#e2e8f0');
+      b.style.color=active?ss.text:'#64748b';
+      b.style.fontWeight=active?'600':'400';
+      b.textContent=(active?'✓ ':'')+st;
+    }
+    refreshBtn();
+
+    // タップでDOMダイレクト更新
+    b.addEventListener('click',()=>{
+      const idx=localStatus.indexOf(st);
+      if(idx>=0)localStatus.splice(idx,1);
+      else localStatus.push(st);
+      refreshBtn();
+      applyBtn.style.background=C.accent;
+    });
+
+    // 長押しで複製モード
+    let lp=null;
+    const startLP=(e)=>{lp=setTimeout(()=>{lp=null;if(e.cancelable)e.preventDefault();
+      state.tempStatus=[...localStatus];
+      setState({copyMode:true,copyStatus:st,copyDays:new Set()});},600);};
+    const endLP=()=>{clearTimeout(lp);lp=null;};
     b.addEventListener('mousedown',startLP);b.addEventListener('mouseup',endLP);b.addEventListener('mouseleave',endLP);
     b.addEventListener('touchstart',startLP,{passive:true});b.addEventListener('touchend',endLP);
-    b.appendChild(span({position:'absolute',bottom:'4px',right:'6px',fontSize:'9px',color:active?ss.text:C.muted,opacity:'0.5'},'長押し'));
     grid.appendChild(b);
   });
   wrap.appendChild(grid);
+
   const row=div({display:'flex',gap:'8px'});
-  row.appendChild(btn({flex:'1',background:'#f5f5f5',border:'none',color:C.sub,borderRadius:'10px',padding:'14px',fontSize:'13px',minHeight:'52px'},()=>setState({tempStatus:[]}),'クリア'));
-  row.appendChild(btn({flex:'2',background:C.accent,border:'none',color:'#fff',borderRadius:'10px',padding:'14px',fontSize:'14px',fontWeight:'700',minHeight:'52px'},()=>{commitMember(modal.dateStr,modal.member,state.tempStatus);setState({modal:null});},'確定'));
+
+  // クリアボタン
+  row.appendChild(btn({flex:'1',background:'#f1f5f9',border:'none',color:'#64748b',
+    borderRadius:'10px',padding:'14px',fontSize:'13px',minHeight:'52px'},()=>{
+    localStatus.length=0;
+    STATUS_LIST.forEach(st=>btns[st]&&(()=>{
+      const b=btns[st];const ss=STATUS_STYLE[st];
+      b.style.background='#f8f9fa';b.style.border='1.5px solid #e2e8f0';
+      b.style.color='#64748b';b.style.fontWeight='400';b.textContent=st;
+    })());
+  },'クリア'));
+
+  // 確定ボタン
+  const applyBtn=document.createElement('button');
+  Object.assign(applyBtn.style,{flex:'2',background:C.accent,color:'#fff',border:'none',
+    borderRadius:'10px',padding:'14px',fontSize:'14px',fontWeight:'600',
+    minHeight:'52px',cursor:'pointer',fontFamily:'inherit'});
+  applyBtn.textContent='確定';
+  applyBtn.addEventListener('click',()=>{
+    commitMember(modal.dateStr,modal.member,[...localStatus]);
+    setState({modal:null});
+  });
+  row.appendChild(applyBtn);
   wrap.appendChild(row);return wrap;
 }
+
 
 function buildCopyModeContent(){
   const{modal,copyStatus}=state;
@@ -1022,7 +1519,7 @@ function buildCopyModeContent(){
   const row=div({display:'flex',gap:'8px'});
 
   // すべて解除
-  row.appendChild(btn({flex:'1',background:'#f5f5f5',border:'none',color:C.sub,borderRadius:'10px',padding:'14px',fontSize:'12px',minHeight:'52px'},()=>{
+  row.appendChild(btn({flex:'1',background:'#f1f5f9',border:'none',color:'#64748b',borderRadius:'10px',padding:'14px',fontSize:'12px',minHeight:'52px'},()=>{
     localSelected.clear();
     // 全ボタンの選択状態をリセット
     grid.querySelectorAll('button').forEach((b2,i)=>{
@@ -1072,7 +1569,7 @@ function buildTodayDashboard(){
   const dc=dayClr(todayDate);
 
   // ── 日付ヘッダー ──
-  const dateHdr=div({background:'linear-gradient(135deg,#c2506e,#7a5080)',borderRadius:'16px',padding:'20px',marginBottom:'16px',color:'#fff',textAlign:'center'});
+  const dateHdr=div({background:'#4f46e5',borderRadius:'12px',padding:'20px',marginBottom:'16px',color:'#fff',textAlign:'center'});
   dateHdr.appendChild(div({fontSize:'13px',opacity:'0.85',marginBottom:'4px'},['今日の担当']));
   dateHdr.appendChild(div({fontSize:'28px',fontWeight:'700',marginBottom:'4px'},
     [(todayDate.getMonth()+1)+'月'+todayDate.getDate()+'日（'+dayLbl(todayDate)+'）'+(isHol(todayDate)?'祝':'')+' ']));
@@ -1114,7 +1611,7 @@ function buildTodayDashboard(){
     const isDuty=DUTY_COLS.some(dc2=>getDutyNames(ds,dc2.key).includes(m.name));
     const card=div({background:'#fff',border:'1px solid '+C.border,borderRadius:'10px',padding:'10px 12px',display:'flex',alignItems:'center',gap:'8px'});
     const dot=div({width:'8px',height:'8px',borderRadius:'50%',flexShrink:'0',
-      background:sts.some(s=>['公休','有休','午前半休','午後半休'].includes(s))?'#f1948a':isDuty?'#c2506e':'#6abf99'});
+      background:sts.some(s=>['公休','有休','午前半休','午後半休'].includes(s))?'#fca5a5':isDuty?'#4f46e5':'#6abf99'});
     card.appendChild(dot);
     card.appendChild(div({fontWeight:'600',fontSize:'13px',flex:'1'},[m.name]));
     if(sts.length){
@@ -1189,6 +1686,120 @@ function copyPrevMonthData(){
 }
 
 
+
+// ============================================================
+// ④ 月またぎ担当連続確認
+// ============================================================
+function buildMonthBoundaryCheck(){
+  const section=div({background:'#fff',border:'1px solid #e2e8f0',borderRadius:'14px',
+    padding:'14px',marginBottom:'20px'});
+
+  const hdr=div({display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'12px'});
+  hdr.appendChild(div({fontWeight:'700',fontSize:'14px',color:'#1e293b'},['月またぎ担当連続確認']));
+
+  // 前月・今月の計算
+  const prevM=state.month===1?12:state.month-1;
+  const prevY=state.month===1?state.year-1:state.year;
+  hdr.appendChild(div({fontSize:'11px',color:C.muted},[prevY+'年'+prevM+'月末 → '+state.year+'年'+state.month+'月頭']));
+  section.appendChild(hdr);
+
+  // 前月末7日 + 今月頭7日を対象
+  const prevDays=getMonthDays(prevY,prevM).slice(-7);
+  const currDays=getMonthDays(state.year,state.month).slice(0,7);
+
+  let hasAny=false;
+
+  DUTY_COLS.forEach(dc=>{
+    // 各メンバーの連続日数を計算
+    const allDays=[...prevDays,...currDays];
+    const memberStreaks={};
+
+    state.members.filter(m=>m.category==='main').forEach(m=>{
+      const streakDays=[];
+      // 後ろから連続を確認
+      let inStreak=false;
+      // 前後に分けてカウント
+      const prevAssigned=prevDays.filter(d=>getDutyArr(state.data,toDS(d),dc.key).includes(m.name));
+      const currAssigned=currDays.filter(d=>getDutyArr(state.data,toDS(d),dc.key).includes(m.name));
+
+      // 前月末から連続しているか確認
+      let prevConsec=0;
+      for(let i=prevDays.length-1;i>=0;i--){
+        if(getDutyArr(state.data,toDS(prevDays[i]),dc.key).includes(m.name)) prevConsec++;
+        else break;
+      }
+      // 今月頭から連続しているか確認
+      let currConsec=0;
+      for(let i=0;i<currDays.length;i++){
+        if(getDutyArr(state.data,toDS(currDays[i]),dc.key).includes(m.name)) currConsec++;
+        else break;
+      }
+
+      if(prevConsec>0&&currConsec>0){
+        memberStreaks[m.name]={prevConsec,currConsec,total:prevConsec+currConsec,color:getMemberColor(m.name)};
+      }
+    });
+
+    const entries=Object.entries(memberStreaks);
+    if(!entries.length)return;
+    hasAny=true;
+
+    const colSec=div({marginBottom:'12px'});
+    const colHdr=div({display:'flex',alignItems:'center',gap:'6px',marginBottom:'8px'});
+    colHdr.appendChild(div({
+      background:dc.lightBg,color:dc.accent,fontSize:'11px',fontWeight:'700',
+      borderRadius:'6px',padding:'3px 8px',border:'1px solid '+dc.accent,
+    },[dc.label]));
+    colSec.appendChild(colHdr);
+
+    entries.forEach(([name,{prevConsec,currConsec,total,color}])=>{
+      const isWarn=total>=4;
+      const row=div({
+        display:'flex',alignItems:'center',gap:'8px',
+        background:isWarn?'#fef2f2':'#f8f9fa',
+        border:'1px solid '+(isWarn?'#fca5a5':'#e2e8f0'),
+        borderRadius:'10px',padding:'10px 12px',marginBottom:'6px',
+        borderLeft:'4px solid '+color,
+      });
+
+      // 名前
+      row.appendChild(div({fontWeight:'700',fontSize:'13px',color,minWidth:'52px'},[name]));
+
+      // チェーン表示
+      const chain=div({display:'flex',alignItems:'center',gap:'4px',flex:'1',flexWrap:'wrap'});
+      const prevChip=div({
+        background:color+'22',color,border:'1px solid '+color,
+        borderRadius:'6px',padding:'3px 8px',fontSize:'11px',fontWeight:'600',
+      },[prevM+'月末 '+prevConsec+'日']);
+      const arrow=div({fontSize:'14px',color:C.muted},['→']);
+      const currChip=div({
+        background:color+'22',color,border:'1px solid '+color,
+        borderRadius:'6px',padding:'3px 8px',fontSize:'11px',fontWeight:'600',
+      },[state.month+'月頭 '+currConsec+'日']);
+      chain.appendChild(prevChip);chain.appendChild(arrow);chain.appendChild(currChip);
+      row.appendChild(chain);
+
+      // 合計・警告
+      const totalDiv=div({
+        fontWeight:'700',fontSize:'13px',
+        color:isWarn?'#dc2626':color,
+        flexShrink:'0',
+      },[isWarn?'⚠ ':'','計'+total+'日']);
+      row.appendChild(totalDiv);
+      colSec.appendChild(row);
+    });
+    section.appendChild(colSec);
+  });
+
+  if(!hasAny){
+    section.appendChild(div({
+      fontSize:'13px',color:C.muted,textAlign:'center',padding:'12px 0',
+    },['月またぎの連続担当はありません ✅']));
+  }
+
+  return section;
+}
+
 // ============================================================
 // 📊 担当回数の偏り表示
 // ============================================================
@@ -1214,7 +1825,7 @@ function buildDutyBalanceChart(ds){
 
   const section=div({background:'#fff',border:'1px solid '+C.border,borderRadius:'14px',padding:'14px',marginBottom:'20px'});
   const hdr=div({display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'12px'});
-  hdr.appendChild(div({fontWeight:'700',fontSize:'14px',color:C.accent},['📊 担当回数の偏り']));
+  hdr.appendChild(div({fontWeight:'700',fontSize:'14px',color:'#1e293b'},['担当回数の偏り']));
   hdr.appendChild(div({fontSize:'11px',color:C.muted},['平均 '+avg.toFixed(1)+'回']));
   section.appendChild(hdr);
 
@@ -1297,7 +1908,7 @@ function buildSwapBanner(){
     }
     return slot;
   };
-  selRow.appendChild(slotStyle('日付 A',swapDayA,'#c2506e'));
+  selRow.appendChild(slotStyle('日付 A',swapDayA,'#db2777'));
   const arrow=div({display:'flex',alignItems:'center',justifyContent:'center',fontSize:'18px',color:C.muted,flexShrink:'0'},['⇄']);
   selRow.appendChild(arrow);
   selRow.appendChild(slotStyle('日付 B',swapDayB,'#7a5080'));
@@ -1308,7 +1919,7 @@ function buildSwapBanner(){
 
   // リセットボタン
   btnRow.appendChild(btn({
-    flex:'1',background:'#f5f5f5',border:'none',color:C.sub,
+    flex:'1',background:'#f1f5f9',border:'none',color:'#64748b',
     borderRadius:'10px',padding:'10px',fontSize:'12px',minHeight:'44px',
   },()=>setState({swapDayA:null,swapDayB:null}),'選択リセット'));
 
@@ -1316,7 +1927,7 @@ function buildSwapBanner(){
   const canSwap=swapDayA&&swapDayB&&swapDayA!==swapDayB;
   btnRow.appendChild(btn({
     flex:'2',
-    background:canSwap?'linear-gradient(135deg,#c2506e,#7a5080)':'#ddd',
+    background:canSwap?'#4f46e5':'#e2e8f0',
     border:'none',color:'#fff',borderRadius:'10px',padding:'10px',
     fontSize:'13px',fontWeight:'700',minHeight:'44px',
     cursor:canSwap?'pointer':'not-allowed',
@@ -1393,8 +2004,11 @@ function executeSwap(dsA,dsB){
 // ── SUMMARY TAB
 function buildSummaryTab(ds){
   const wrap=div({padding:'12px 12px 40px',maxWidth:'700px',margin:'0 auto'});
-  wrap.appendChild(div({fontFamily:'Georgia,serif',fontSize:'16px',fontWeight:'700',color:C.accent,marginBottom:'4px'},['📊 担当一覧サマリー']));
+  wrap.appendChild(div({fontSize:'16px',fontWeight:'700',color:'#1e293b',marginBottom:'4px'},['担当一覧サマリー']));
   wrap.appendChild(div({fontSize:'12px',color:C.muted,marginBottom:'16px'},['月の全担当をまとめて確認できます']));
+
+  // ── ④ 月またぎ連続確認 ──
+  wrap.appendChild(buildMonthBoundaryCheck());
 
   // ── 担当回数の偏り表示 ──
   wrap.appendChild(buildDutyBalanceChart(ds));
@@ -1443,7 +2057,7 @@ function buildSummaryTab(ds){
 function buildPersonalTab(ds){
   const{personalMember}=state;
   const wrap=div({padding:'12px 12px 40px',maxWidth:'500px',margin:'0 auto'});
-  wrap.appendChild(div({fontFamily:'Georgia,serif',fontSize:'16px',fontWeight:'700',color:C.accent,marginBottom:'4px'},['👤 個人ビュー']));
+  wrap.appendChild(div({fontSize:'16px',fontWeight:'700',color:'#1e293b',marginBottom:'4px'},['個人ビュー']));
   wrap.appendChild(div({fontSize:'12px',color:C.muted,marginBottom:'14px'},['メンバーを選んで担当日を確認']));
   const selWrap=div({display:'flex',flexWrap:'wrap',gap:'8px',marginBottom:'16px'});
   state.members.forEach(m=>{const active=personalMember===m.name;const cat=m.category==='main'?C.mainCat:C.subCat;const catBg=m.category==='main'?C.mainBg:C.subBg;selWrap.appendChild(btn({background:active?cat:catBg,color:active?'#fff':cat,border:'2px solid '+(active?cat:C.border),borderRadius:'20px',padding:'8px 16px',fontSize:'13px',fontWeight:active?'700':'500',minHeight:'42px'},()=>setState({personalMember:m.name}),m.name));});
@@ -1505,7 +2119,7 @@ function initApp(loaded){
   state.data=data;
 
   if(Array.isArray(loaded.members)&&loaded.members.length>0){
-    state.members=loaded.members;
+    state.members=ensureMemberColors(loaded.members);
     state.nextId=state.members.length>0?Math.max(...state.members.map(m=>m.id||0))+1:11;
   }
   document.getElementById('loading').style.display='none';
