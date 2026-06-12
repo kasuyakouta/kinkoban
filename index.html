@@ -776,6 +776,44 @@ function buildMemberEditor(){
 }
 
 // ── ボタン行レンダラ（共通）
+// テーブルセルのバッジ表示をDOM直接更新（rerenderなし）
+function updateCellDisplay(ds,name,sts){
+  const cell=document.querySelector('[data-cell="'+ds+'__'+name+'"]');
+  if(!cell)return;
+
+  // displaySts を計算（夜間現場→現場、責任者除外）
+  const displaySts=sts.filter(s=>s!=='責任者').map(s=>s==='夜間現場'?'現場':s);
+
+  // セルの背景色更新
+  const mem=state.members.find(m=>m.name===name);
+  const mc=mem?.category==='main'?getMemberColor(name):null;
+  const isOpen=state.bottomPanel&&state.bottomPanel.member===name&&state.bottomPanel.dateStr===ds;
+  const ss=STATUS_STYLE[displaySts[0]];
+
+  // 背景はisOpenのハイライト or ステータス色
+  if(!isOpen){
+    cell.style.background=ss?ss.bg:'';
+  }
+
+  // バッジ部分だけ再構築
+  // 既存の inner div を探して置き換え
+  const existingInner=cell.querySelector('div');
+  if(existingInner)existingInner.remove();
+
+  if(displaySts.length){
+    const inner=document.createElement('div');
+    inner.style.cssText='display:flex;flex-wrap:wrap;gap:1px;justify-content:center;';
+    displaySts.forEach(st=>{
+      const s=STATUS_STYLE[st];
+      const badge=document.createElement('span');
+      badge.style.cssText='background:'+(s?.bg||'#eee')+';color:'+(s?.text||'#333')+';border:1px solid '+(s?.border||'#ccc')+';border-radius:3px;padding:0 2px;font-size:9px;font-weight:600;white-space:nowrap;display:block;line-height:1.6;';
+      badge.textContent=st;
+      inner.appendChild(badge);
+    });
+    cell.appendChild(inner);
+  }
+}
+
 function renderBtnRow(btnRow,ds,name,mc,showItems,localSts){
   function refreshBtn(st,b){
     const ss=STATUS_STYLE[st];
@@ -800,6 +838,7 @@ function renderBtnRow(btnRow,ds,name,mc,showItems,localSts){
       if(idx>=0)localSts.splice(idx,1);else localSts.push(realSt);
       refreshBtn(st,b);
       commitMemberSilent(ds,name,[...localSts]);
+      updateCellDisplay(ds,name,[...localSts]);
     });
     btnRow.appendChild(b);
   });
@@ -812,6 +851,7 @@ function renderBtnRow(btnRow,ds,name,mc,showItems,localSts){
     localSts.length=0;
     showItems.forEach(st=>{if(btnMap[st])refreshBtn(st,btnMap[st]);});
     commitMemberSilent(ds,name,[]);
+    updateCellDisplay(ds,name,[]);
   });
   btnRow.appendChild(clearB);
 }
