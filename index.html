@@ -1038,9 +1038,23 @@ function buildBottomPanel(panel){
   nameTag.id='bp-member-name';nameTag.textContent=member;
   hdr.appendChild(nameTag);
 
-  const dateTag=div({fontSize:'12px',color:C.sub,flexShrink:'0'});
+  // 案C：日付カード（メンバーバッジと同高さ・曜日色付き）
+  const dow=d.getDay();
+  const dowColor=isHol(d)||dow===0?'#ef4444':dow===6?'#3b82f6':'#64748b';
+  const dateTag=div({
+    display:'flex',alignItems:'center',gap:'4px',
+    background:'#f1f5f9',borderRadius:'6px',
+    padding:'4px 10px',flexShrink:'0',
+  });
   dateTag.id='bp-date';
-  dateTag.textContent=(d.getMonth()+1)+'/'+d.getDate()+'（'+dayLbl(d)+'）'+(isHol(d)?'祝':'')+(wkEnd?' 🔴':' 🟢');
+  const dateNum=document.createElement('span');
+  dateNum.style.cssText='font-size:14px;font-weight:700;color:#1e293b;';
+  dateNum.textContent=(d.getMonth()+1)+'/'+d.getDate();
+  const dateWd=document.createElement('span');
+  dateWd.style.cssText='font-size:13px;font-weight:700;color:'+dowColor+';';
+  dateWd.textContent=dayLbl(d)+(isHol(d)?'祝':'');
+  dateTag.appendChild(dateNum);
+  dateTag.appendChild(dateWd);
   hdr.appendChild(dateTag);
 
   hdr.appendChild(btn({
@@ -1088,14 +1102,17 @@ function buildTable(ds,mm,sm){
   tr1.appendChild(mkTh('日付',{color:C.muted}));tr1.appendChild(mkTh('曜',{color:C.muted}));
   DUTY_COLS.forEach(dc=>tr1.appendChild(mkTh(dc.label,{background:dc.lightBg,color:dc.accent,borderLeft:'2px solid '+C.strong,borderRight:'2px solid '+C.strong})));
   tr1.appendChild(mkTh('',{padding:'0',background:C.strong,border:'none'}));
-  mm.forEach(m=>tr1.appendChild(mkTh(m.name,{background:C.mainBg,color:C.mainCat})));
+  mm.forEach(m=>{
+    const mc=getMemberColor(m.name);
+    tr1.appendChild(mkTh(m.name,{background:mc+'22',color:mc,borderBottom:'2px solid '+mc}));
+  });
   if(sm.length)tr1.appendChild(mkTh('',{padding:'0',background:C.subBorder,border:'none'}));
   sm.forEach(m=>tr1.appendChild(mkTh(m.name,{background:C.subBg,color:C.subCat})));
   thead.appendChild(tr1);tbl.appendChild(thead);
   const tbody=el('tbody');
   ds.forEach((date,di)=>{
     const dstr=toDS(date);const wkEnd=isWk(date)||isHol(date);const req=isReq(date);
-    const rowBg=wkEnd?C.wkBg:(di%2===0?C.bg:C.bgAlt);
+    const rowBg=di%2===0?C.bg:C.bgAlt;
     const is20=date.getDate()===20,is21=date.getDate()===21;const dc=dayClr(date);
     const isToday=toDS(date)===TODAY_DS;
     // ① 今日の行背景：薄いインディゴ
@@ -1188,16 +1205,15 @@ function buildTable(ds,mm,sm){
       const displaySts=rawSts.map(s=>s==='夜間現場'?'現場':s);
       const ss=STATUS_STYLE[displaySts[0]];
       const mc=m.category==='main'?getMemberColor(m.name):null;
-      const isOpen=state.bottomPanel&&state.bottomPanel.member===m.name&&state.bottomPanel.dateStr===dstr;
+      const defaultBg=ss?ss.bg:rowBg;
       const mtd=mkTd({
-        background:isOpen?(mc?mc+'28':C.aLight):(ss?ss.bg:rowBg),
+        background:defaultBg,
         cursor:editMode==='edit'?'pointer':'default',
         padding:'3px 2px',
-        borderLeft:mc?'3px solid '+mc:'1px solid '+C.border,
-        outline:isOpen?'2px solid '+(mc||C.accent):'none',
-        outlineOffset:'-2px',
+        borderLeft:'1px solid '+C.border,
       });
       mtd.setAttribute('data-cell',dstr+'__'+m.name);
+      mtd.setAttribute('data-default-bg',defaultBg);
       if(editMode==='edit')mtd.addEventListener('click',()=>openMemberModal(dstr,m.name));
       if(displaySts.length){
         const inner=div({display:'flex',flexWrap:'wrap',gap:'1px',justifyContent:'center'});
@@ -1477,15 +1493,24 @@ function buildAssignModal(){
 function openDutyModal(ds,key){setState({modal:{kind:'duty',dateStr:ds,dutyKey:key},tempDuty:getDutyNames(ds,key)});}
 function openMemberModal(ds,name){
   const isSame=state.bottomPanel&&state.bottomPanel.member===name&&state.bottomPanel.dateStr===ds;
-  if(isSame){setState({bottomPanel:null});return;}
+  if(isSame){clearAllCellHighlight();setState({bottomPanel:null});return;}
   // パネルが既に開いている→中身だけDOM更新（rerenderなし）
   if(state.bottomPanel){
     state.bottomPanel={dateStr:ds,member:name,tab:'default'};
     updateBottomPanelDOM(ds,name,'default');
     return;
   }
-  // 初回オープン→rerenderでパネル表示
+  // 初回オープン：スクロール位置を保存→rerender→スクロール復元＋ハイライト適用
+  const tw=document.getElementById('shift-table-wrap');
+  const savedScroll=tw?tw.scrollLeft:0;
   setState({bottomPanel:{dateStr:ds,member:name,tab:'default'}});
+  requestAnimationFrame(()=>{
+    const tw2=document.getElementById('shift-table-wrap');
+    if(tw2)tw2.scrollLeft=savedScroll;
+    const mem=state.members.find(m=>m.name===name);
+    const mc2=mem?.category==='main'?getMemberColor(name):C.muted;
+    updateTableHighlight(ds,name,mc2);
+  });
 }
 // パネルのDOM内容だけ更新（rerenderなし）
 function updateBottomPanelDOM(ds,name,tab){
@@ -1505,7 +1530,15 @@ function updateBottomPanelDOM(ds,name,tab){
   const hdrName=document.getElementById('bp-member-name');
   if(hdrName){hdrName.textContent=name;hdrName.style.background=mc;}
   const hdrDate=document.getElementById('bp-date');
-  if(hdrDate){hdrDate.textContent=(d.getMonth()+1)+'/'+d.getDate()+'（'+dayLbl(d)+'）'+(isHol(d)?'祝':'')+(wkEnd?' 🔴':' 🟢');hdrDate.style.display='';}
+  if(hdrDate){
+    hdrDate.innerHTML='';
+    const dow2=d.getDay();
+    const dowColor2=isHol(d)||dow2===0?'#ef4444':dow2===6?'#3b82f6':'#64748b';
+    const dn=document.createElement('span');dn.style.cssText='font-size:14px;font-weight:700;color:#1e293b;';dn.textContent=(d.getMonth()+1)+'/'+d.getDate();
+    const dw=document.createElement('span');dw.style.cssText='font-size:13px;font-weight:700;color:'+dowColor2+';';dw.textContent=dayLbl(d)+(isHol(d)?'祝':'');
+    hdrDate.appendChild(dn);hdrDate.appendChild(dw);
+    hdrDate.style.display='';
+  }
 
   // タブ非表示（廃止）を解除してそのまま
   const tabWrapEl=document.getElementById('bp-tab-wrap');
