@@ -539,8 +539,13 @@ function buildHeader(misOfc,misSafe,misClean){
         transition:'all 0.15s',
         minHeight:'42px',
       },()=>{
-        if(key==='view') setState({editMode:'view',showMembers:false,showSettings:false,activeAction:'view',bottomPanel:null});
-        else if(key==='edit') setState({editMode:'edit',showMembers:false,showSettings:false,activeAction:'edit'});
+        if(key==='view'||key==='edit'){
+          const tw=document.getElementById('shift-table-wrap');
+          const sv=tw?tw.scrollLeft:0;
+          if(key==='view') setState({editMode:'view',showMembers:false,showSettings:false,activeAction:'view',bottomPanel:null});
+          else setState({editMode:'edit',showMembers:false,showSettings:false,activeAction:'edit'});
+          requestAnimationFrame(()=>{const tw2=document.getElementById('shift-table-wrap');if(tw2)tw2.scrollLeft=sv;});
+        }
         else if(key==='assign') setState({editMode:'edit',showMembers:false,showSettings:false,activeAction:'assign',showAssign:true});
       },label);
       segWrap.appendChild(b);
