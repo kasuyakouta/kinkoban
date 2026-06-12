@@ -833,6 +833,20 @@ function renderBtnRow(btnRow,ds,name,mc,showItems,localSts){
     const b=document.createElement('button');
     Object.assign(b.style,{flexShrink:'0',padding:'10px 16px',fontSize:'13px',borderRadius:'10px',cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap',display:'flex',alignItems:'center',gap:'5px'});
     refreshBtn(st,b);btnMap[st]=b;
+
+    // 公休のみ長押しでカレンダーモード
+    if(st==='公休'){
+      let lpTimer=null;
+      const startLP=()=>{lpTimer=setTimeout(()=>{lpTimer=null;openCalendarMode(ds,name,mc);},600);};
+      const endLP=()=>{clearTimeout(lpTimer);lpTimer=null;};
+      b.addEventListener('mousedown',startLP);
+      b.addEventListener('mouseup',endLP);
+      b.addEventListener('mouseleave',endLP);
+      b.addEventListener('touchstart',startLP,{passive:true});
+      b.addEventListener('touchend',endLP);
+      b.addEventListener('touchcancel',endLP);
+    }
+
     b.addEventListener('click',()=>{
       const idx=localSts.indexOf(realSt);
       if(idx>=0)localSts.splice(idx,1);else localSts.push(realSt);
@@ -854,6 +868,133 @@ function renderBtnRow(btnRow,ds,name,mc,showItems,localSts){
     updateCellDisplay(ds,name,[]);
   });
   btnRow.appendChild(clearB);
+}
+
+// ── カレンダーモードを開く（DOM直接更新）
+function openCalendarMode(ds,name,mc){
+  const panel=document.getElementById('bottom-panel');
+  if(!panel)return;
+  // ヘッダーのタブ・日付欄を非表示にしてカレンダー表示に切替
+  const btnRow=document.getElementById('bp-btn-row');
+  if(btnRow){
+    btnRow.innerHTML='';
+    btnRow.style.padding='0';
+    btnRow.style.overflowX='visible';
+    buildCalendarInPanel(btnRow,ds,name,mc);
+  }
+  // 日付タグを「カレンダーモード」表示に
+  const dateTag=document.getElementById('bp-date');
+  if(dateTag)dateTag.textContent='長押し：公休カレンダー';
+  // タブを隠す
+  const tabWrap=document.getElementById('bp-tab-wrap');
+  if(tabWrap)tabWrap.style.display='none';
+}
+
+// カレンダーをパネル内に構築
+function buildCalendarInPanel(container,ds,name,mc){
+  const y=state.year,m=state.month;
+  // すべてのステータス表示対象
+  const SHOW_STS=['公休','有休','午前半休','午後半休','現場'];
+
+  // ヘッダー（戻るボタン＋月表示）
+  const calHdr=document.createElement('div');
+  calHdr.style.cssText='display:flex;align-items:center;gap:8px;padding:8px 14px 6px;border-bottom:1px solid #e2e8f0;';
+  const backBtn=document.createElement('button');
+  Object.assign(backBtn.style,{background:'#f1f5f9',border:'none',color:'#64748b',borderRadius:'6px',padding:'6px 12px',fontSize:'12px',fontWeight:'700',cursor:'pointer',fontFamily:'inherit',flexShrink:'0'});
+  backBtn.textContent='← 戻る';
+  backBtn.addEventListener('click',()=>setState({bottomPanel:{dateStr:ds,member:name,tab:'default'}}));
+  calHdr.appendChild(backBtn);
+  const calTitle=document.createElement('div');
+  calTitle.style.cssText='font-size:13px;font-weight:700;color:#1e293b;flex:1;text-align:center;';
+  calTitle.textContent=y+'年'+m+'月　'+name+'の公休';
+  calHdr.appendChild(calTitle);
+  container.appendChild(calHdr);
+
+  // 曜日ヘッダー
+  const wdRow=document.createElement('div');
+  wdRow.style.cssText='display:grid;grid-template-columns:repeat(7,1fr);padding:4px 8px 2px;gap:2px;';
+  ['日','月','火','水','木','金','土'].forEach((wd,i)=>{
+    const c=document.createElement('div');
+    c.style.cssText='text-align:center;font-size:10px;font-weight:700;color:'+(i===0?'#ef4444':i===6?'#3b82f6':'#94a3b8')+';padding:2px 0;';
+    c.textContent=wd;
+    wdRow.appendChild(c);
+  });
+  container.appendChild(wdRow);
+
+  // 日付グリッド
+  const grid=document.createElement('div');
+  grid.style.cssText='display:grid;grid-template-columns:repeat(7,1fr);padding:2px 8px 8px;gap:3px;';
+  grid.id='cal-grid';
+
+  // 月初の曜日オフセット
+  const firstDay=new Date(y,m-1,1).getDay();
+  const lastDate=new Date(y,m,0).getDate();
+
+  // 空白セル
+  for(let i=0;i<firstDay;i++){
+    const blank=document.createElement('div');
+    grid.appendChild(blank);
+  }
+
+  // 日付セル
+  for(let date=1;date<=lastDate;date++){
+    const dstr=y+'-'+(String(m).padStart(2,'0'))+'-'+(String(date).padStart(2,'0'));
+    const sts=getStatuses(dstr,name).filter(s=>s!=='責任者');
+    const displaySts=sts.map(s=>s==='夜間現場'?'現場':s).filter(s=>SHOW_STS.includes(s));
+    const hasKyukyu=sts.includes('公休');
+    const d=new Date(y,m-1,date);
+    const isWkEnd=isWk(d)||isHol(d);
+    const isToday=dstr===TODAY_DS;
+
+    const cell=document.createElement('div');
+    cell.setAttribute('data-cal-date',dstr);
+    const baseBg=hasKyukyu?STATUS_STYLE['公休'].bg:(isWkEnd?'#fef2f2':'#f8f9fa');
+    Object.assign(cell.style,{
+      borderRadius:'8px',
+      padding:'4px 2px',
+      textAlign:'center',
+      cursor:'pointer',
+      border:'1.5px solid '+(hasKyukyu?STATUS_STYLE['公休'].border:(isToday?mc:'#e2e8f0')),
+      background:baseBg,
+      minHeight:'48px',
+      display:'flex',flexDirection:'column',alignItems:'center',gap:'2px',
+      userSelect:'none',WebkitUserSelect:'none',
+    });
+
+    // 日付数字
+    const dateNum=document.createElement('div');
+    dateNum.style.cssText='font-size:12px;font-weight:'+(isToday?'700':'600')+';color:'+(isToday?mc:isWkEnd?'#ef4444':hasKyukyu?STATUS_STYLE['公休'].text:'#1e293b')+';line-height:1.4;';
+    dateNum.textContent=date;
+    cell.appendChild(dateNum);
+
+    // ステータスバッジ（公休以外）
+    const otherSts=displaySts.filter(s=>s!=='公休');
+    otherSts.forEach(st=>{
+      const ss=STATUS_STYLE[st];
+      const badge=document.createElement('div');
+      badge.style.cssText='font-size:8px;font-weight:700;color:'+(ss?.text||'#333')+';background:'+(ss?.bg||'#eee')+';border-radius:3px;padding:1px 3px;line-height:1.3;white-space:nowrap;';
+      badge.textContent=st;
+      cell.appendChild(badge);
+    });
+
+    // タップで公休トグル
+    cell.addEventListener('click',()=>{
+      const cur=getStatuses(dstr,name).filter(s=>s!=='責任者');
+      let next;
+      if(cur.includes('公休')){next=cur.filter(s=>s!=='公休');}
+      else{next=[...cur,'公休'];}
+      commitMemberSilent(dstr,name,next);
+      updateCellDisplay(dstr,name,next);
+      // カレンダーセルのスタイルを即更新
+      const nowHas=next.includes('公休');
+      cell.style.background=nowHas?STATUS_STYLE['公休'].bg:(isWkEnd?'#fef2f2':'#f8f9fa');
+      cell.style.borderColor=nowHas?STATUS_STYLE['公休'].border:(isToday?mc:'#e2e8f0');
+      dateNum.style.color=nowHas?STATUS_STYLE['公休'].text:(isToday?mc:isWkEnd?'#ef4444':'#1e293b');
+    });
+
+    grid.appendChild(cell);
+  }
+  container.appendChild(grid);
 }
 
 // ── ボトム固定パネル
@@ -892,6 +1033,7 @@ function buildBottomPanel(panel){
 
   // タブ切替（タブ切替だけは再描画OK）
   const tabWrap=div({display:'flex',background:'#f1f5f9',borderRadius:'8px',padding:'2px',gap:'2px',marginLeft:'auto',flexShrink:'0'});
+  tabWrap.id='bp-tab-wrap';
   ['よく使う','その他'].forEach((lbl,i)=>{
     const key=i===0?'default':'other';
     const isA=tab===key;
