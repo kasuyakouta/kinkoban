@@ -497,7 +497,7 @@ function buildHeader(misOfc,misSafe,misClean){
       padding:'5px 14px',fontWeight:'600',fontSize:'14px',color:'#1e293b',
       textAlign:'center',minWidth:'108px',letterSpacing:'-0.01em',
     });
-    mbox.appendChild(txt(year+'年'+month+'月'));
+    mbox.appendChild(txt(year+'年'+month+'/21〜'));
     nav.appendChild(mbox);
     nav.appendChild(navBtn('›',()=>{let m=state.month+1,y=state.year;if(m>12){m=1;y++;}setState({month:m,year:y,swapDayA:null,swapDayB:null,bottomPanel:null});}));
     top.appendChild(nav);
@@ -1120,33 +1120,50 @@ function buildTable(ds,mm,sm){
     const rowBg=di%2===0?C.bg:C.bgAlt;
     const is20=date.getDate()===20,is21=date.getDate()===21;const dc=dayClr(date);
     const isToday=toDS(date)===TODAY_DS;
-    // ① 今日の行背景：薄いインディゴ
-    const todayRowBg=isToday?'#eef2ff':rowBg;
+    // 案B：行背景は通常交互、日付＋曜日をカプセル型で囲む
+    const todayRowBg=rowBg;
     const tr=el('tr',{style:{
-      background:todayRowBg,
+      background:rowBg,
       borderTop:is21?'2px solid '+C.accent:'',
       borderBottom:is20?'2px solid '+C.accent:'',
     }});
+    if(isToday)tr.setAttribute('data-today-row','1');
+    const TB='2px solid #4f46e5'; // 今日の外枠色
+    const TI='1px solid #c7d2fe'; // 今日の内側ボーダー
     function mkTd(s){return el('td',{style:{
       border:'1px solid '+(isToday?'#c7d2fe':C.border),
       padding:'3px 2px',height:'44px',verticalAlign:'middle',
       textAlign:'center',whiteSpace:'nowrap',overflow:'hidden',...s}});}
-    // swap モード時の日付セルスタイル
     const isSwapA=state.swapMode&&state.swapDayA===dstr;
     const isSwapB=state.swapMode&&state.swapDayB===dstr;
-    const dateBg=isToday?'#4f46e5':isSwapA?'#db2777':isSwapB?'#7c3aed':todayRowBg;
-    const dateFg=isToday||isSwapA||isSwapB?'#fff':dc;
-    // ② 今日は左に太いインディゴボーダーライン
+    // 日付セル：通常背景、カプセルはtd内部に描画
+    const dateFg=isSwapA||isSwapB?'#fff':dc;
+    const dateBg=isSwapA?'#db2777':isSwapB?'#7c3aed':rowBg;
     const dateTd=mkTd({
       color:dateFg,fontWeight:'700',fontSize:'12px',background:dateBg,
       position:'relative',cursor:state.swapMode?'pointer':'default',
-      borderLeft:isToday?'4px solid #4f46e5':'1px solid '+C.border,
+      padding:'2px 2px',
+      ...(isToday&&!isSwapA&&!isSwapB?{borderLeft:TB,borderTop:TB,borderBottom:TB,borderRight:TI}:{}),
     });
-    dateTd.appendChild(document.createTextNode((date.getMonth()+1)+'/'+date.getDate()));
-    if(isToday&&!isSwapA&&!isSwapB)dateTd.appendChild(el('span',{style:{fontSize:'8px',display:'block',color:'rgba(255,255,255,0.85)',fontWeight:'600'}},'今日'));
-    if(isSwapA)dateTd.appendChild(el('span',{style:{fontSize:'8px',display:'block',color:'#fff'}},'日A'));
-    if(isSwapB)dateTd.appendChild(el('span',{style:{fontSize:'8px',display:'block',color:'#fff'}},'日B'));
-    if(isHol(date)&&!isSwapA&&!isSwapB)dateTd.appendChild(el('span',{style:{fontSize:'9px',color:isToday?'#fff':C.sun,display:'block'}},['祝']));
+    if(isToday&&!isSwapA&&!isSwapB){
+      // カプセル型ラッパー：日付＋曜日を包む（wdTdにもまたがるため日付セル内に「今日」バッジ）
+      const cap=document.createElement('div');
+      cap.style.cssText='background:#4f46e5;color:#fff;border-radius:8px;padding:4px 6px;display:inline-flex;flex-direction:column;align-items:center;line-height:1.2;min-width:36px;';
+      const dateSpan=document.createElement('span');
+      dateSpan.style.cssText='font-size:12px;font-weight:700;';
+      dateSpan.textContent=(date.getMonth()+1)+'/'+date.getDate();
+      const todayLabel=document.createElement('span');
+      todayLabel.style.cssText='font-size:8px;font-weight:600;opacity:0.85;';
+      todayLabel.textContent='今日';
+      cap.appendChild(dateSpan);
+      cap.appendChild(todayLabel);
+      dateTd.appendChild(cap);
+    }else{
+      dateTd.appendChild(document.createTextNode((date.getMonth()+1)+'/'+date.getDate()));
+      if(isSwapA)dateTd.appendChild(el('span',{style:{fontSize:'8px',display:'block',color:'#fff'}},'日A'));
+      if(isSwapB)dateTd.appendChild(el('span',{style:{fontSize:'8px',display:'block',color:'#fff'}},'日B'));
+      if(isHol(date)&&!isSwapA&&!isSwapB)dateTd.appendChild(el('span',{style:{fontSize:'9px',color:C.sun,display:'block'}},['祝']));
+    }
     // swap モード時のタップ処理
     if(state.swapMode){
       dateTd.addEventListener('click',()=>{
@@ -1165,23 +1182,32 @@ function buildTable(ds,mm,sm){
     const wdTd=mkTd({
       color:isToday?'#4f46e5':dc,
       fontWeight:'800',fontSize:'13px',
-      background:todayRowBg,
+      background:rowBg,
       borderRight:'2px solid '+C.strong,
+      ...(isToday?{borderTop:TB,borderBottom:TB,borderLeft:TI}:{}),
     });
-    wdTd.appendChild(document.createTextNode(dayLbl(date)));tr.appendChild(wdTd);
+    if(isToday){
+      // 曜日もカプセルと統一してインディゴ太字
+      const wdCap=document.createElement('div');
+      wdCap.style.cssText='background:#eef2ff;color:#4f46e5;border-radius:6px;padding:4px 4px;font-size:13px;font-weight:800;display:inline-block;min-width:24px;';
+      wdCap.textContent=dayLbl(date);
+      wdTd.appendChild(wdCap);
+    }else{
+      wdTd.appendChild(document.createTextNode(dayLbl(date)));
+    }
+    tr.appendChild(wdTd);
     DUTY_COLS.forEach(dc2=>{
       const vals=getDutyNames(dstr,dc2.key);const needed=dc2.req?req:true;const miss=needed&&!vals.length;
       // ④ 今日の担当セル：lightBgを使いつつ強調ボーダー
       const cellBg=miss?'#fde8e8':vals.length?dc2.lightBg:todayRowBg;
+      const isLastDuty=dc2.key===DUTY_COLS[DUTY_COLS.length-1].key;
       const dtd=mkTd({
         background:cellBg,
         borderLeft:'2px solid '+C.strong,
         borderRight:'2px solid '+C.strong,
-        // 今日の担当セルは上下ボーダーをアクセントカラーに
-        borderTop:isToday?'2px solid '+dc2.accent:'1px solid '+(isToday?'#c7d2fe':C.border),
-        borderBottom:isToday?'2px solid '+dc2.accent:'1px solid '+(isToday?'#c7d2fe':C.border),
         cursor:editMode==='edit'?'pointer':'default',
         padding:'4px 2px',
+        ...(isToday?{borderTop:TB,borderBottom:TB,...(isLastDuty?{borderRight:TB}:{})}:{}),
       });
       if(editMode==='edit')dtd.addEventListener('click',()=>openDutyModal(dstr,dc2.key));
       if(miss)dtd.appendChild(el('span',{style:{color:C.warnText,fontSize:'10px',fontWeight:'700'}},['!']));
@@ -1192,10 +1218,8 @@ function buildTable(ds,mm,sm){
           // ④ 今日の担当バッジはやや大きく
           inner.appendChild(el('span',{style:{
             background:mc,color:'#fff',borderRadius:'4px',
-            padding:isToday?'3px 6px':'2px 5px',
-            fontSize:isToday?'11px':'10px',
-            fontWeight:'700',
-            letterSpacing:'-0.02em',whiteSpace:'nowrap',
+            padding:'2px 5px',fontSize:'10px',
+            fontWeight:'700',letterSpacing:'-0.02em',whiteSpace:'nowrap',
           }},[v]));
         });
         dtd.appendChild(inner);
