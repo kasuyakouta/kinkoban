@@ -1611,29 +1611,41 @@ function buildModal(){
 }
 
 function buildDutyModalContent(){
-  const{modal,tempDuty}=state;
+  const{modal}=state;
   const dc=DUTY_COLS.find(c=>c.key===modal.dutyKey);
   const mm=mainMembers();const sm=subMembers();
   const wrap=div({});
+  // ローカル配列で管理（rerenderなし）
+  const localDuty=[...getDutyNames(modal.dateStr,modal.dutyKey)];
+  const btnRefs={};
 
   wrap.appendChild(div({fontWeight:'700',fontSize:'15px',color:'#1e293b',marginBottom:'2px'},[dc.label+' 担当者']));
   wrap.appendChild(div({color:C.muted,fontSize:'12px',marginBottom:'14px'},[modal.dateStr+' ／ 複数選択可']));
+
+  function refreshDutyBtn(name,b){
+    const mc=state.members.find(m=>m.name===name)?.category==='main'?getMemberColor(name):C.muted;
+    const active=localDuty.includes(name);
+    b.style.background=active?mc+'22':'#f8f9fa';
+    b.style.border='1.5px solid '+(active?mc:'#e2e8f0');
+    b.style.color=active?mc:'#64748b';
+    b.style.fontWeight=active?'700':'400';
+    b.textContent=(active?'✓ ':'')+name;
+  }
 
   function mkGrid(members,catLabel,catColor){
     if(!members.length)return;
     wrap.appendChild(div({fontSize:'11px',color:catColor,fontWeight:'600',marginBottom:'6px'}),[catLabel]);
     const grid=div({display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(76px,1fr))',gap:'8px',marginBottom:'12px'});
     members.forEach(m=>{
-      const mc=m.category==='main'?getMemberColor(m.name):C.muted;
-      const active=tempDuty.includes(m.name);
-      const b=btn({
-        background:active?mc+'22':'#f8f9fa',
-        border:'1.5px solid '+(active?mc:'#e2e8f0'),
-        color:active?mc:'#64748b',
-        borderRadius:'10px',padding:'14px 4px',fontSize:'13px',
-        fontWeight:active?'700':'400',minHeight:'52px',
-      },()=>setState({tempDuty:tempDuty.includes(m.name)?tempDuty.filter(x=>x!==m.name):[...tempDuty,m.name]}),
-      (active?'✓ ':'')+m.name);
+      const b=document.createElement('button');
+      Object.assign(b.style,{borderRadius:'10px',padding:'14px 4px',fontSize:'13px',minHeight:'52px',cursor:'pointer',fontFamily:'inherit',width:'100%'});
+      refreshDutyBtn(m.name,b);
+      btnRefs[m.name]=b;
+      b.addEventListener('click',()=>{
+        const idx=localDuty.indexOf(m.name);
+        if(idx>=0)localDuty.splice(idx,1);else localDuty.push(m.name);
+        refreshDutyBtn(m.name,b);
+      });
       grid.appendChild(b);
     });
     wrap.appendChild(grid);
@@ -1642,8 +1654,13 @@ function buildDutyModalContent(){
 
   // ── 確定 / クリア ──
   const row=div({display:'flex',gap:'8px',marginBottom:'12px'});
-  row.appendChild(btn({flex:'1',background:'#f1f5f9',border:'none',color:'#64748b',borderRadius:'10px',padding:'14px',fontSize:'13px',minHeight:'52px'},()=>setState({tempDuty:[]}),'クリア'));
-  row.appendChild(btn({flex:'2',background:C.accent,border:'none',color:'#fff',borderRadius:'10px',padding:'14px',fontSize:'14px',fontWeight:'600',minHeight:'52px'},()=>{commitDuty(modal.dateStr,modal.dutyKey,state.tempDuty);setState({modal:null});},'確定'));
+  row.appendChild(btn({flex:'1',background:'#f1f5f9',border:'none',color:'#64748b',borderRadius:'10px',padding:'14px',fontSize:'13px',minHeight:'52px'},()=>{
+    localDuty.length=0;
+    Object.keys(btnRefs).forEach(n=>refreshDutyBtn(n,btnRefs[n]));
+  },'クリア'));
+  row.appendChild(btn({flex:'2',background:C.accent,border:'none',color:'#fff',borderRadius:'10px',padding:'14px',fontSize:'14px',fontWeight:'600',minHeight:'52px'},()=>{
+    commitDuty(modal.dateStr,modal.dutyKey,[...localDuty]);setState({modal:null});
+  },'確定'));
   wrap.appendChild(row);
 
   // ── ① 複数日まとめて設定 ──
