@@ -110,7 +110,7 @@ const STATUS_STYLE={
   '午後半休':{bg:'#eff6ff',text:'#2563eb',border:'#bfdbfe'},
 };
 const DUTY_COLS=[
-  {key:'__office__',label:'事務所番',accent:'#db2777',lightBg:'#fdf2f8',tag:'#ec4899',req:true},
+  {key:'__office__',label:'事務所番',accent:'#db2777',lightBg:'#fdf2f8',tag:'#ec4899',req:false},
   {key:'__safe__',  label:'金庫番',  accent:'#d97706',lightBg:'#fffbeb',tag:'#f59e0b',req:false},
   {key:'__clean__', label:'掃除',    accent:'#059669',lightBg:'#ecfdf5',tag:'#10b981',req:false},
 ];
@@ -349,14 +349,30 @@ function days(){return getMonthDays(state.year,state.month);}
 
 const ABSENT=['公休','有休','午前半休','午後半休'];
 function availMain(ds){return mainMembers().map(m=>m.name).filter(n=>!getStatuses(ds,n).some(s=>ABSENT.includes(s)));}
-function buildCount(nd){const c={};mainMembers().forEach(m=>{c[m.name]=0;});days().forEach(d=>{const ds=toDS(d);DUTY_COLS.forEach(dc=>{getDutyArr(nd,ds,dc.key).forEach(n=>{if(c[n]!==undefined)c[n]++;});});});return c;}
+// 当番回数＝当番だった「日数」（事務所番・金庫番・掃除は同一人物なので1日1カウント）
+function buildCount(nd){const c={};mainMembers().forEach(m=>{c[m.name]=0;});days().forEach(d=>{const ds=toDS(d);const names=new Set();DUTY_COLS.forEach(dc=>{getDutyArr(nd,ds,dc.key).forEach(n=>names.add(n));});names.forEach(n=>{if(c[n]!==undefined)c[n]++;});});return c;}
 function adjDS(ds,delta){const d=new Date(ds);d.setDate(d.getDate()+delta);return d.toISOString().slice(0,10);}
 function buildPool(avail,nd,ds,count,opts){if(!avail.length)return[];return[...avail].sort((a,b)=>{let sa=0,sb=0;const pDS=adjDS(ds,-1);if(opts.consec){const aP=DUTY_COLS.some(dc=>getDutyArr(nd,pDS,dc.key).includes(a));const bP=DUTY_COLS.some(dc=>getDutyArr(nd,pDS,dc.key).includes(b));sa+=aP?-5:0;sb+=bP?-5:0;}if(opts.noConsec){const aP=DUTY_COLS.some(dc=>getDutyArr(nd,pDS,dc.key).includes(a));const bP=DUTY_COLS.some(dc=>getDutyArr(nd,pDS,dc.key).includes(b));sa+=aP?+10:0;sb+=bP?+10:0;}sa+=(count[a]||0);sb+=(count[b]||0);return sa-sb;});}
 function applyDuty(nd,ds,key,names){const dd={...(nd[ds]||{})};return{...nd,[ds]:syncDutyToMembers(dd,key,names,state.members)};}
 
-// 事務所番・金庫番・掃除のうち、当日「同一人物」ルールが適用される担当キー一覧を返す
-// 土日祝：3つ全部 / 平日：金庫番・掃除のみ（事務所番は対象外）
-function linkedDutyKeys(date){return isReq(date)?['__office__','__safe__','__clean__']:['__safe__','__clean__'];}
+// 事務所番・金庫番・掃除は毎日同一人物・必須（土日祝/平日の区別なし）
+function linkedDutyKeys(date){return['__office__','__safe__','__clean__'];}
+
+// シフト表の担当欄セルをどう結合表示するか決める。
+// 3つの値が実際に一致していれば1セルに結合し、一致しない（過去データ等の想定外）場合は個別セルにフォールバックする。
+function buildDutyRowGroups(dstr,date){
+  const eq=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+  const officeVals=getDutyNames(dstr,'__office__');
+  const safeVals=getDutyNames(dstr,'__safe__');
+  const cleanVals=getDutyNames(dstr,'__clean__');
+  if(eq(officeVals,safeVals)&&eq(safeVals,cleanVals)){
+    return[{cols:DUTY_COLS,vals:officeVals}];
+  }
+  if(eq(safeVals,cleanVals)){
+    return[{cols:[DUTY_COLS[0]],vals:officeVals},{cols:[DUTY_COLS[1],DUTY_COLS[2]],vals:safeVals}];
+  }
+  return DUTY_COLS.map(dc=>({cols:[dc],vals:getDutyNames(dstr,dc.key)}));
+}
 
 // 担当欄モーダル側：keyに設定したnamesを、連動グループの全キーに反映する
 function applyLinkedDuty(nd,ds,key,names){
@@ -388,10 +404,8 @@ function applyLinkedDutyForMember(nd,ds,name,checkedLabels){
 }
 
 /**
- * 自動振り分けロジック（改訂版）
- * ルール:
- *   土日祝 → 事務所番・金庫番・掃除を同一人物
- *   平日   → 金庫番・掃除を同一人物（事務所番は不要）
+ * 自動振り分けロジック
+ * ルール: 事務所番・金庫番・掃除は毎日同一人物（土日祝/平日の区別なし）
  * 返り値: { data: 更新後データ, alerts: 割り当て不可日リスト }
  */
 function runAutoAssign(nd,opts,skip){
@@ -400,54 +414,29 @@ function runAutoAssign(nd,opts,skip){
 
   days().forEach(d=>{
     const ds=toDS(d);
-    const wkEnd=isReq(d); // 土日祝
     const avail=availMain(ds);
 
-    if(wkEnd){
-      // ── 土日祝：事務所番・金庫番・掃除を同一人物 ──
-      const offEx=getDutyArr(nd,ds,'__office__');
-      const safeEx=getDutyArr(nd,ds,'__safe__');
-      const cleanEx=getDutyArr(nd,ds,'__clean__');
-      const allSet=offEx.length&&safeEx.length&&cleanEx.length;
-      if(skip&&allSet)return; // スキップモードで全設定済みならパス
+    const offEx=getDutyArr(nd,ds,'__office__');
+    const safeEx=getDutyArr(nd,ds,'__safe__');
+    const cleanEx=getDutyArr(nd,ds,'__clean__');
+    const allSet=offEx.length&&safeEx.length&&cleanEx.length;
+    if(skip&&allSet)return; // スキップモードで全設定済みならパス
 
-      // 既に誰かが設定されていればその人を使う（優先順位: 事務所番>金庫番>掃除）
-      let chosen=offEx[0]||safeEx[0]||cleanEx[0]||null;
-      if(!chosen){
-        const pool=buildPool(avail,nd,ds,count,opts);
-        if(!pool.length){
-          alerts.push((d.getMonth()+1)+'/'+d.getDate()+'('+dayLbl(d)+') 土日祝');
-          return;
-        }
-        chosen=pool[0];
+    // 既に誰かが設定されていればその人を使う（優先順位: 事務所番>金庫番>掃除）
+    let chosen=offEx[0]||safeEx[0]||cleanEx[0]||null;
+    if(!chosen){
+      const pool=buildPool(avail,nd,ds,count,opts);
+      if(!pool.length){
+        alerts.push((d.getMonth()+1)+'/'+d.getDate()+'('+dayLbl(d)+')');
+        return;
       }
-      // 3列すべて同一人物に設定
-      nd=applyDuty(nd,ds,'__office__',[chosen]);
-      nd=applyDuty(nd,ds,'__safe__',[chosen]);
-      nd=applyDuty(nd,ds,'__clean__',[chosen]);
-      count[chosen]=(count[chosen]||0)+3;
-
-    } else {
-      // ── 平日：金庫番・掃除を同一人物（事務所番は不要）──
-      const safeEx=getDutyArr(nd,ds,'__safe__');
-      const cleanEx=getDutyArr(nd,ds,'__clean__');
-      const bothSet=safeEx.length&&cleanEx.length;
-      if(skip&&bothSet)return;
-
-      // 既に片方が設定されていればその人を使う
-      let chosen=safeEx[0]||cleanEx[0]||null;
-      if(!chosen){
-        const pool=buildPool(avail,nd,ds,count,opts);
-        if(!pool.length){
-          alerts.push((d.getMonth()+1)+'/'+d.getDate()+'('+dayLbl(d)+') 平日');
-          return;
-        }
-        chosen=pool[0];
-      }
-      nd=applyDuty(nd,ds,'__safe__',[chosen]);
-      nd=applyDuty(nd,ds,'__clean__',[chosen]);
-      count[chosen]=(count[chosen]||0)+2;
+      chosen=pool[0];
     }
+    // 3列すべて同一人物に設定
+    nd=applyDuty(nd,ds,'__office__',[chosen]);
+    nd=applyDuty(nd,ds,'__safe__',[chosen]);
+    nd=applyDuty(nd,ds,'__clean__',[chosen]);
+    count[chosen]=(count[chosen]||0)+1; // 当番日数として1日1カウント
   });
 
   return {data:nd, alerts};
@@ -476,14 +465,9 @@ function autoAssignPreview(){
   let c=0;
   days().forEach(d=>{
     const ds=toDS(d);
-    const wkEnd=isReq(d);
-    if(wkEnd){
-      // 土日祝：3列すべて未設定なら1件としてカウント
-      if(!getDutyArr(state.data,ds,'__office__').length)c++;
-    } else {
-      // 平日：金庫番が未設定なら1件
-      if(!getDutyArr(state.data,ds,'__safe__').length)c++;
-    }
+    // 事務所番・金庫番・掃除のいずれかが未設定なら1件としてカウント（runAutoAssignのallSet判定と一致させる）
+    const allSet=getDutyArr(state.data,ds,'__office__').length&&getDutyArr(state.data,ds,'__safe__').length&&getDutyArr(state.data,ds,'__clean__').length;
+    if(!allSet)c++;
   });
   return c;
 }
@@ -503,7 +487,7 @@ function render(){const app=document.getElementById('app');app.innerHTML='';app.
 function buildApp(){
   const {tab,editMode,showMembers,showSettings,activeAction,modal,showAssign,bottomPanel}=state;
   const ds=days();const mm=mainMembers();const sm=subMembers();
-  const misOfc=ds.filter(d=>isReq(d)&&!getDutyNames(toDS(d),'__office__').length).length;
+  const misOfc=ds.filter(d=>!getDutyNames(toDS(d),'__office__').length).length;
   const misSafe=ds.filter(d=>!getDutyNames(toDS(d),'__safe__').length).length;
   const misClean=ds.filter(d=>!getDutyNames(toDS(d),'__clean__').length).length;
   const root=div({background:C.bg,color:C.text,fontSize:'14px',minHeight:'100vh',display:'flex',flexDirection:'column'});
@@ -852,7 +836,7 @@ function updateCellDisplay(ds,name,sts){
   const mc=getMemberColor(name);
   const isOpen=state.bottomPanel&&state.bottomPanel.member===name&&state.bottomPanel.dateStr===ds;
   const ss=STATUS_STYLE[scheduleSts[0]];
-  const defaultBg=onDuty?mc:(ss?ss.bg:'');
+  const defaultBg=onDuty?mc+'22':(ss?ss.bg:'');
 
   // 背景はisOpenのハイライト or 当番カラー／ステータス色
   if(!isOpen){
@@ -1273,11 +1257,14 @@ function buildTable(ds,mm,sm){
       wdTd.appendChild(document.createTextNode(dayLbl(date)));
     }
     tr.appendChild(wdTd);
-    DUTY_COLS.forEach(dc2=>{
-      const vals=getDutyNames(dstr,dc2.key);const needed=dc2.req?req:true;const miss=needed&&!vals.length;
-      // ④ 今日の担当セル：lightBgを使いつつ強調ボーダー
-      const cellBg=miss?'#fde8e8':vals.length?dc2.lightBg:todayRowBg;
-      const isLastDuty=dc2.key===DUTY_COLS[DUTY_COLS.length-1].key;
+    // 事務所番・金庫番・掃除：連動グループ（同一人物）ごとに1セルへ結合表示する
+    buildDutyRowGroups(dstr,date).forEach(g=>{
+      const vals=g.vals;const isMerged=g.cols.length>1;
+      const needed=g.cols.some(dc2=>dc2.req?req:true);const miss=needed&&!vals.length;
+      // 結合セルは担当者本人のカラーを淡色で塗りつぶし、非結合セルは従来通りlightBg
+      const mc=vals.length?getMemberColor(vals[0]):null;
+      const cellBg=miss?'#fde8e8':vals.length?(isMerged?mc+'22':g.cols[0].lightBg):todayRowBg;
+      const isLastDuty=g.cols[g.cols.length-1].key===DUTY_COLS[DUTY_COLS.length-1].key;
       const dtd=mkTd({
         background:cellBg,
         borderLeft:'2px solid '+C.strong,
@@ -1286,18 +1273,27 @@ function buildTable(ds,mm,sm){
         padding:'4px 2px',
         ...(isToday?{borderTop:TB,borderBottom:TB,...(isLastDuty?{borderRight:TB}:{})}:{}),
       });
-      if(editMode==='edit')dtd.addEventListener('click',()=>openDutyModal(dstr,dc2.key));
+      dtd.colSpan=g.cols.length;
+      if(editMode==='edit')dtd.addEventListener('click',()=>openDutyModal(dstr,g.cols[0].key));
       if(miss)dtd.appendChild(el('span',{style:{color:C.warnText,fontSize:'10px',fontWeight:'700'}},['!']));
       else if(vals.length){
         const inner=div({display:'flex',flexWrap:'wrap',gap:'2px',justifyContent:'center'});
         vals.forEach(v=>{
-          const mc=getMemberColor(v);
-          // ④ 今日の担当バッジはやや大きく
-          inner.appendChild(el('span',{style:{
-            background:mc,color:'#fff',borderRadius:'4px',
-            padding:'2px 5px',fontSize:'10px',
-            fontWeight:'700',letterSpacing:'-0.02em',whiteSpace:'nowrap',
-          }},[v]));
+          if(isMerged){
+            // 結合セルは淡色背景なので、名前は担当者カラーの文字で直接表示
+            inner.appendChild(el('span',{style:{
+              color:mc,fontSize:'11px',fontWeight:'700',
+              letterSpacing:'-0.02em',whiteSpace:'nowrap',
+            }},[v]));
+          }else{
+            const vc=getMemberColor(v);
+            // ④ 今日の担当バッジはやや大きく
+            inner.appendChild(el('span',{style:{
+              background:vc,color:'#fff',borderRadius:'4px',
+              padding:'2px 5px',fontSize:'10px',
+              fontWeight:'700',letterSpacing:'-0.02em',whiteSpace:'nowrap',
+            }},[v]));
+          }
         });
         dtd.appendChild(inner);
       }
@@ -1308,12 +1304,12 @@ function buildTable(ds,mm,sm){
     [...mm,...(sm.length?[null]:[]),...sm].forEach(m=>{
       if(m===null){tr.appendChild(mkTd({padding:'0',background:C.subBorder,border:'none'}));return;}
       const rawSts=getStatuses(dstr,m.name).filter(s=>s!=='責任者');
-      // 当番（事務所番・金庫番・掃除）はセル全体を担当者カラーで塗りつぶし、文字バッジは表示しない
+      // 当番（事務所番・金庫番・掃除）はセル全体を担当者カラー（淡色）で塗りつぶし、文字バッジは表示しない
       const onDuty=DUTY_COLS.some(dc2=>getDutyNames(dstr,dc2.key).includes(m.name));
       const scheduleSts=rawSts.filter(s=>!DUTY_LABELS.includes(s)).map(s=>s==='夜間現場'?'現場':s);
       const ss=STATUS_STYLE[scheduleSts[0]];
       const mc=getMemberColor(m.name);
-      const defaultBg=onDuty?mc:(ss?ss.bg:rowBg);
+      const defaultBg=onDuty?mc+'22':(ss?ss.bg:rowBg);
       const mtd=mkTd({
         background:defaultBg,
         cursor:editMode==='edit'?'pointer':'default',
@@ -1884,51 +1880,34 @@ function buildMonthBoundaryCheck(){
   const prevDays=getMonthDays(prevY,prevM).slice(-7);
   const currDays=getMonthDays(state.year,state.month).slice(0,7);
 
-  let hasAny=false;
+  // 事務所番・金庫番・掃除は同一人物なので、当番かどうかは1つの判定でよい
+  const onDuty=(d,name)=>DUTY_COLS.some(dc=>getDutyArr(state.data,toDS(d),dc.key).includes(name));
+  const memberStreaks={};
 
-  DUTY_COLS.forEach(dc=>{
-    // 各メンバーの連続日数を計算
-    const allDays=[...prevDays,...currDays];
-    const memberStreaks={};
+  state.members.filter(m=>m.category==='main').forEach(m=>{
+    // 前月末から連続しているか確認
+    let prevConsec=0;
+    for(let i=prevDays.length-1;i>=0;i--){
+      if(onDuty(prevDays[i],m.name)) prevConsec++;
+      else break;
+    }
+    // 今月頭から連続しているか確認
+    let currConsec=0;
+    for(let i=0;i<currDays.length;i++){
+      if(onDuty(currDays[i],m.name)) currConsec++;
+      else break;
+    }
+    if(prevConsec>0&&currConsec>0){
+      memberStreaks[m.name]={prevConsec,currConsec,total:prevConsec+currConsec,color:getMemberColor(m.name)};
+    }
+  });
 
-    state.members.filter(m=>m.category==='main').forEach(m=>{
-      const streakDays=[];
-      // 後ろから連続を確認
-      let inStreak=false;
-      // 前後に分けてカウント
-      const prevAssigned=prevDays.filter(d=>getDutyArr(state.data,toDS(d),dc.key).includes(m.name));
-      const currAssigned=currDays.filter(d=>getDutyArr(state.data,toDS(d),dc.key).includes(m.name));
-
-      // 前月末から連続しているか確認
-      let prevConsec=0;
-      for(let i=prevDays.length-1;i>=0;i--){
-        if(getDutyArr(state.data,toDS(prevDays[i]),dc.key).includes(m.name)) prevConsec++;
-        else break;
-      }
-      // 今月頭から連続しているか確認
-      let currConsec=0;
-      for(let i=0;i<currDays.length;i++){
-        if(getDutyArr(state.data,toDS(currDays[i]),dc.key).includes(m.name)) currConsec++;
-        else break;
-      }
-
-      if(prevConsec>0&&currConsec>0){
-        memberStreaks[m.name]={prevConsec,currConsec,total:prevConsec+currConsec,color:getMemberColor(m.name)};
-      }
-    });
-
-    const entries=Object.entries(memberStreaks);
-    if(!entries.length)return;
-    hasAny=true;
-
-    const colSec=div({marginBottom:'12px'});
-    const colHdr=div({display:'flex',alignItems:'center',gap:'6px',marginBottom:'8px'});
-    colHdr.appendChild(div({
-      background:dc.lightBg,color:dc.accent,fontSize:'11px',fontWeight:'700',
-      borderRadius:'6px',padding:'3px 8px',border:'1px solid '+dc.accent,
-    },[dc.label]));
-    colSec.appendChild(colHdr);
-
+  const entries=Object.entries(memberStreaks);
+  if(!entries.length){
+    section.appendChild(div({
+      fontSize:'13px',color:C.muted,textAlign:'center',padding:'12px 0',
+    },['月またぎの連続担当はありません ✅']));
+  } else {
     entries.forEach(([name,{prevConsec,currConsec,total,color}])=>{
       const isWarn=total>=4;
       const row=div({
@@ -1963,15 +1942,8 @@ function buildMonthBoundaryCheck(){
         flexShrink:'0',
       },[isWarn?'⚠ ':'','計'+total+'日']);
       row.appendChild(totalDiv);
-      colSec.appendChild(row);
+      section.appendChild(row);
     });
-    section.appendChild(colSec);
-  });
-
-  if(!hasAny){
-    section.appendChild(div({
-      fontSize:'13px',color:C.muted,textAlign:'center',padding:'12px 0',
-    },['月またぎの連続担当はありません ✅']));
   }
 
   return section;
@@ -1984,14 +1956,14 @@ function buildDutyBalanceChart(ds){
   const mm=mainMembers();
   if(!mm.length)return div({});
 
-  // 各メンバーの担当回数を集計
+  // 各メンバーの当番日数を集計（事務所番・金庫番・掃除は同一人物なので1日1カウント）
   const counts={};
   mm.forEach(m=>{counts[m.name]=0;});
   ds.forEach(d=>{
     const dstr=toDS(d);
-    DUTY_COLS.forEach(dc=>{
-      getDutyNames(dstr,dc.key).forEach(n=>{if(counts[n]!==undefined)counts[n]++;});
-    });
+    const names=new Set();
+    DUTY_COLS.forEach(dc=>{getDutyNames(dstr,dc.key).forEach(n=>names.add(n));});
+    names.forEach(n=>{if(counts[n]!==undefined)counts[n]++;});
   });
 
   const entries=Object.entries(counts).sort((a,b)=>b[1]-a[1]);
@@ -2003,7 +1975,7 @@ function buildDutyBalanceChart(ds){
   const section=div({background:'#fff',border:'1px solid '+C.border,borderRadius:'14px',padding:'14px',marginBottom:'20px'});
   const hdr=div({display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'12px'});
   hdr.appendChild(div({fontWeight:'700',fontSize:'14px',color:'#1e293b'},['担当回数の偏り']));
-  hdr.appendChild(div({fontSize:'11px',color:C.muted},['平均 '+avg.toFixed(1)+'回']));
+  hdr.appendChild(div({fontSize:'11px',color:C.muted},['平均 '+avg.toFixed(1)+'日']));
   section.appendChild(hdr);
 
   entries.forEach(([name,count])=>{
@@ -2014,7 +1986,7 @@ function buildDutyBalanceChart(ds){
     const labelRow=div({display:'flex',justifyContent:'space-between',marginBottom:'4px',alignItems:'center'});
     labelRow.appendChild(div({fontSize:'12px',fontWeight:'600',color:C.text},[name]));
     const countDiv=div({display:'flex',alignItems:'center',gap:'6px'});
-    countDiv.appendChild(div({fontSize:'13px',fontWeight:'700',color:barColor},[count+'回']));
+    countDiv.appendChild(div({fontSize:'13px',fontWeight:'700',color:barColor},[count+'日']));
     if(Math.abs(diff)>0.5){
       countDiv.appendChild(div({fontSize:'10px',color:barColor,background:barColor+'22',borderRadius:'4px',padding:'1px 5px',fontWeight:'700'},[diff>0?'+'+diff.toFixed(1):diff.toFixed(1)]));
     }
@@ -2189,31 +2161,42 @@ function buildSummaryTab(ds){
 
   // ── 担当回数の偏り表示 ──
   wrap.appendChild(buildDutyBalanceChart(ds));
-  DUTY_COLS.forEach(dc=>{
-    const section=div({marginBottom:'20px'});
-    const sh=div({background:dc.lightBg,border:'1px solid '+dc.accent,borderRadius:'10px 10px 0 0',padding:'10px 14px',display:'flex',alignItems:'center',gap:'8px'});
-    sh.appendChild(div({fontWeight:'700',color:dc.accent,fontSize:'14px'},[dc.label]));
-    const total=ds.filter(d=>dc.req?isReq(d):true).length;
-    const set=ds.filter(d=>{if(dc.req&&!isReq(d))return false;return getDutyNames(toDS(d),dc.key).length>0;}).length;
-    sh.appendChild(div({fontSize:'12px',color:dc.accent,marginLeft:'auto'},[set+'/'+total+'日設定済み'+(set<total?' ⚠':'  ✅')]));
-    section.appendChild(sh);
-    const body=div({background:'#fff',border:'1px solid '+dc.accent,borderTop:'none',borderRadius:'0 0 10px 10px',padding:'10px 14px'});
-    const byMember={};
-    ds.forEach(d=>{if(dc.req&&!isReq(d))return;getDutyNames(toDS(d),dc.key).forEach(n=>{if(!byMember[n])byMember[n]=[];byMember[n].push(d);});});
-    const entries=Object.entries(byMember).sort((a,b)=>b[1].length-a[1].length);
-    if(!entries.length)body.appendChild(div({fontSize:'13px',color:C.muted,textAlign:'center',padding:'8px 0'},['担当者未設定']));
-    else entries.forEach(([name,memberDays])=>{
-      const row=div({display:'flex',gap:'8px',alignItems:'flex-start',marginBottom:'10px',paddingBottom:'10px',borderBottom:'1px solid '+C.border});
-      const nb=div({flexShrink:'0',width:'52px',background:dc.lightBg,color:dc.accent,borderRadius:'8px',padding:'6px 4px',textAlign:'center',fontWeight:'700',fontSize:'12px'});
-      nb.appendChild(txt(name));nb.appendChild(div({fontSize:'10px',color:dc.accent,opacity:'0.8',marginTop:'2px'},[memberDays.length+'日']));row.appendChild(nb);
-      const chips=div({display:'flex',flexWrap:'wrap',gap:'4px',flex:'1'});
-      memberDays.forEach(d=>{const wkEnd=isWk(d)||isHol(d);const chip=div({background:wkEnd?C.wkBg:'#f8f8f8',border:'1px solid '+(wkEnd?dc.accent:C.border),borderRadius:'6px',padding:'4px 7px',fontSize:'12px',fontWeight:wkEnd?'700':'400',color:wkEnd?dc.accent:C.text,whiteSpace:'nowrap'});chip.appendChild(txt((d.getMonth()+1)+'/'+d.getDate()+'('+dayLbl(d)+')'));chips.appendChild(chip);});
-      row.appendChild(chips);body.appendChild(row);
-    });
-    const unsetDays=ds.filter(d=>{if(dc.req&&!isReq(d))return false;return getDutyNames(toDS(d),dc.key).length===0;});
-    if(unsetDays.length>0){const ur=div({display:'flex',gap:'4px',flexWrap:'wrap',marginTop:'4px',padding:'8px',background:C.warnBg,borderRadius:'8px'});ur.appendChild(div({fontSize:'12px',color:C.warnText,fontWeight:'700',width:'100%',marginBottom:'4px'},['⚠ 未設定 '+unsetDays.length+'日']));unsetDays.forEach(d=>{const chip=div({background:'#fff',border:'1px solid '+C.warnBorder,borderRadius:'6px',padding:'4px 7px',fontSize:'12px',color:C.warnText,whiteSpace:'nowrap'});chip.appendChild(txt((d.getMonth()+1)+'/'+d.getDate()+'('+dayLbl(d)+')'));ur.appendChild(chip);});body.appendChild(ur);}
-    section.appendChild(body);wrap.appendChild(section);
+
+  // ── 当番一覧（事務所番・金庫番・掃除は同一人物なので1つに統合）──
+  const dutySection=div({marginBottom:'20px'});
+  const dutySh=div({background:C.aLight,border:'1px solid '+C.accent,borderRadius:'10px 10px 0 0',padding:'10px 14px',display:'flex',alignItems:'center',gap:'8px'});
+  dutySh.appendChild(div({fontWeight:'700',color:C.accent,fontSize:'14px'},['当番']));
+  const dutyIsSet=d=>DUTY_COLS.every(dc=>getDutyNames(toDS(d),dc.key).length>0);
+  const dutyTotal=ds.length;
+  const dutySet=ds.filter(dutyIsSet).length;
+  dutySh.appendChild(div({fontSize:'12px',color:C.accent,marginLeft:'auto'},[dutySet+'/'+dutyTotal+'日設定済み'+(dutySet<dutyTotal?' ⚠':'  ✅')]));
+  dutySection.appendChild(dutySh);
+  const dutyBody=div({background:'#fff',border:'1px solid '+C.accent,borderTop:'none',borderRadius:'0 0 10px 10px',padding:'10px 14px'});
+  const byMember={};
+  ds.forEach(d=>{
+    const dstr=toDS(d);const names=new Set();
+    DUTY_COLS.forEach(dc=>{getDutyNames(dstr,dc.key).forEach(n=>names.add(n));});
+    names.forEach(n=>{if(!byMember[n])byMember[n]=[];byMember[n].push(d);});
   });
+  const dutyEntries=Object.entries(byMember).sort((a,b)=>b[1].length-a[1].length);
+  if(!dutyEntries.length)dutyBody.appendChild(div({fontSize:'13px',color:C.muted,textAlign:'center',padding:'8px 0'},['担当者未設定']));
+  else dutyEntries.forEach(([name,memberDays])=>{
+    const mc=getMemberColor(name);
+    const row=div({display:'flex',gap:'8px',alignItems:'flex-start',marginBottom:'10px',paddingBottom:'10px',borderBottom:'1px solid '+C.border});
+    const nb=div({flexShrink:'0',width:'52px',background:mc+'22',color:mc,borderRadius:'8px',padding:'6px 4px',textAlign:'center',fontWeight:'700',fontSize:'12px'});
+    nb.appendChild(txt(name));nb.appendChild(div({fontSize:'10px',color:mc,opacity:'0.8',marginTop:'2px'},[memberDays.length+'日']));row.appendChild(nb);
+    const chips=div({display:'flex',flexWrap:'wrap',gap:'4px',flex:'1'});
+    memberDays.forEach(d=>{const wkEnd=isWk(d)||isHol(d);const chip=div({background:wkEnd?C.wkBg:'#f8f8f8',border:'1px solid '+(wkEnd?mc:C.border),borderRadius:'6px',padding:'4px 7px',fontSize:'12px',fontWeight:wkEnd?'700':'400',color:wkEnd?mc:C.text,whiteSpace:'nowrap'});chip.appendChild(txt((d.getMonth()+1)+'/'+d.getDate()+'('+dayLbl(d)+')'));chips.appendChild(chip);});
+    row.appendChild(chips);dutyBody.appendChild(row);
+  });
+  const unsetDays=ds.filter(d=>!dutyIsSet(d));
+  if(unsetDays.length>0){
+    const ur=div({display:'flex',gap:'4px',flexWrap:'wrap',marginTop:'4px',padding:'8px',background:C.warnBg,borderRadius:'8px'});
+    ur.appendChild(div({fontSize:'12px',color:C.warnText,fontWeight:'700',width:'100%',marginBottom:'4px'},['⚠ 未設定 '+unsetDays.length+'日']));
+    unsetDays.forEach(d=>{const chip=div({background:'#fff',border:'1px solid '+C.warnBorder,borderRadius:'6px',padding:'4px 7px',fontSize:'12px',color:C.warnText,whiteSpace:'nowrap'});chip.appendChild(txt((d.getMonth()+1)+'/'+d.getDate()+'('+dayLbl(d)+')'));ur.appendChild(chip);});
+    dutyBody.appendChild(ur);
+  }
+  dutySection.appendChild(dutyBody);wrap.appendChild(dutySection);
   const absSection=div({marginBottom:'20px'});
   absSection.appendChild(div({fontFamily:'Georgia,serif',fontSize:'14px',fontWeight:'700',color:C.subCat,marginBottom:'10px'},['🏖 休暇・半休 集計']));
   const absGrid=div({display:'grid',gridTemplateColumns:'1fr 1fr',gap:'8px'});
