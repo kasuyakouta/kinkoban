@@ -2232,6 +2232,22 @@ function pruneOldData(data){
   return{data,pruned};
 }
 
+// 「事務所番は平日対象外」だった旧ルール時代のデータを補完する。
+// 金庫番・掃除が同一人物で設定済み、かつ事務所番だけ食い違っている日は事務所番も同じ人物に揃える。
+function backfillOfficeDuty(rawData){
+  let data=rawData;let changed=false;
+  Object.keys(data).forEach(ds=>{
+    const safe=getDutyArr(data,ds,'__safe__');
+    const clean=getDutyArr(data,ds,'__clean__');
+    const office=getDutyArr(data,ds,'__office__');
+    if(safe.length&&JSON.stringify(safe)===JSON.stringify(clean)&&JSON.stringify(office)!==JSON.stringify(safe)){
+      data=applyLinkedDuty(data,ds,'__safe__',safe);
+      changed=true;
+    }
+  });
+  return{data,changed};
+}
+
 function initApp(loaded){
   const raw=loaded.shiftData||{};
 
@@ -2248,7 +2264,10 @@ function initApp(loaded){
       else if(v==='責任者'){dd[k]=[];cleanedResp=true;}
     });
   });
-  state.data=data;
+
+  // 旧ルール（平日は事務所番対象外）時代のデータを補完
+  const{data:filledData,changed:backfilled}=backfillOfficeDuty(data);
+  state.data=filledData;
 
   if(Array.isArray(loaded.members)&&loaded.members.length>0){
     state.members=ensureMemberColors(loaded.members);
@@ -2258,8 +2277,8 @@ function initApp(loaded){
   document.getElementById('setup').classList.remove('show');
   document.getElementById('app').style.display='block';
 
-  // 削除があった場合は自動保存
-  if(pruned||cleanedResp)scheduleSave();
+  // 削除・補完があった場合は自動保存
+  if(pruned||cleanedResp||backfilled)scheduleSave();
 
   render();
 
