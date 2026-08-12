@@ -141,6 +141,8 @@ const C={
 // DATE UTILS
 // ============================================================
 function getMonthDays(y,m){const days=[];for(let d=new Date(y,m-1,21);d<=new Date(y,m,20);d.setDate(d.getDate()+1))days.push(new Date(d));return days;}
+// 21日始まりの業務月ラベルを算出する（例：8/13→7月期間＝7/21〜8/20、8/25→8月期間＝8/21〜9/20）
+function getPeriodYM(d){let y=d.getFullYear(),m=d.getMonth()+1;if(d.getDate()<21){m--;if(m<1){m=12;y--;}}return{year:y,month:m};}
 function toDS(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function isHol(d){return HOLIDAYS.includes(toDS(d));}
 function isWk(d){const w=d.getDay();return w===0||w===6;}
@@ -282,8 +284,9 @@ function setSaveStatus(s){
 // STATE
 // ============================================================
 const today=new Date();
+const initPeriod=getPeriodYM(today); // 21日始まりの業務月に合わせた初期表示期間
 let state={
-  year:today.getFullYear(),month:today.getMonth()+1,
+  year:initPeriod.year,month:initPeriod.month,
   data:{},members:DEFAULT_MEMBERS,
   editMode:'view',showMembers:false,showSettings:false,activeAction:'view',showToday:false,swapMode:false,swapDayA:null,swapDayB:null,showResetModal:false,
   tab:'shift',modal:null,personalMember:null,
