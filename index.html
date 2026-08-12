@@ -97,6 +97,7 @@ const STATUS_LIST=['事務所番','金庫番','掃除','夜間現場','公休','
 const STATUS_DEFAULT=['公休','有休','午前半休','午後半休','現場'];
 const STATUS_OTHER=['事務所番','金庫番','掃除','夜間現場'];
 const DUTY_STATUS_MAP={'__office__':'事務所番','__safe__':'金庫番','__clean__':'掃除'};
+const DUTY_LABELS=Object.values(DUTY_STATUS_MAP); // ['事務所番','金庫番','掃除']
 const STATUS_STYLE={
   '事務所番':{bg:'#fdf2f8',text:'#db2777',border:'#fbcfe8'},
   '金庫番'  :{bg:'#fffbeb',text:'#d97706',border:'#fde68a'},
@@ -288,12 +289,10 @@ const initPeriod=getPeriodYM(today); // 21日始まりの業務月に合わせ�
 let state={
   year:initPeriod.year,month:initPeriod.month,
   data:{},members:DEFAULT_MEMBERS,
-  editMode:'view',showMembers:false,showSettings:false,activeAction:'view',showToday:false,swapMode:false,swapDayA:null,swapDayB:null,showResetModal:false,
-  tab:'shift',modal:null,personalMember:null,
-  tempDuty:[],tempStatus:[],
-  copyMode:false,copyStatus:null,copyDays:new Set(),
+  editMode:'view',showMembers:false,showSettings:false,activeAction:'view',swapMode:false,swapDayA:null,swapDayB:null,showResetModal:false,
+  tab:'shift',modal:null,
   assignOpts:{pair:false,consec:false,noConsec:false},
-  showAssign:false,copied:false,nextId:11,bottomPanel:null,
+  showAssign:false,copied:false,nextId:11,bottomPanel:null,showBalancePanel:false,
 };
 let longPressTimer=null,rerenderScheduled=false,memberSaveTimer=null;
 let lastRenderedMonth=''; // 月切替検知用
@@ -335,12 +334,14 @@ function syncMemberToDuty(dd,name,sts){const r={...dd};r[name]=sts;Object.entrie
 function getDutyArr(nd,ds,key){const v=nd[ds]?.[key];return Array.isArray(v)?v:(v?[v]:[]);}
 function getStatuses(ds,name){const v=state.data[ds]?.[name];if(!v)return[];return Array.isArray(v)?v:[v];}
 function getDutyNames(ds,key){return getDutyArr(state.data,ds,key);}
-function commitDuty(ds,key,names){const d={...state.data};const dd={...(d[ds]||{})};d[ds]=syncDutyToMembers(dd,key,names,state.members);setState({data:d},true);}
-function commitMember(ds,name,sts){const d={...state.data};const dd={...(d[ds]||{})};d[ds]=syncMemberToDuty(dd,name,sts);setState({data:d},true);}
+function commitDuty(ds,key,names){const d=applyLinkedDuty(state.data,ds,key,names);setState({data:d},true);}
 function commitMemberSilent(ds,name,sts){
-  const d={...state.data};const dd={...(d[ds]||{})};
+  let d={...state.data};const dd={...(d[ds]||{})};
   d[ds]=syncMemberToDuty(dd,name,sts);
-  state.data=d;scheduleSave();
+  const checked=new Set(sts.filter(s=>DUTY_LABELS.includes(s)));
+  const r=applyLinkedDutyForMember(d,ds,name,checked);
+  state.data=r.data;scheduleSave();
+  return r.affected;
 }
 function mainMembers(){return state.members.filter(m=>m.category==='main');}
 function subMembers(){return state.members.filter(m=>m.category==='sub');}
@@ -352,6 +353,39 @@ function buildCount(nd){const c={};mainMembers().forEach(m=>{c[m.name]=0;});days
 function adjDS(ds,delta){const d=new Date(ds);d.setDate(d.getDate()+delta);return d.toISOString().slice(0,10);}
 function buildPool(avail,nd,ds,count,opts){if(!avail.length)return[];return[...avail].sort((a,b)=>{let sa=0,sb=0;const pDS=adjDS(ds,-1);if(opts.consec){const aP=DUTY_COLS.some(dc=>getDutyArr(nd,pDS,dc.key).includes(a));const bP=DUTY_COLS.some(dc=>getDutyArr(nd,pDS,dc.key).includes(b));sa+=aP?-5:0;sb+=bP?-5:0;}if(opts.noConsec){const aP=DUTY_COLS.some(dc=>getDutyArr(nd,pDS,dc.key).includes(a));const bP=DUTY_COLS.some(dc=>getDutyArr(nd,pDS,dc.key).includes(b));sa+=aP?+10:0;sb+=bP?+10:0;}sa+=(count[a]||0);sb+=(count[b]||0);return sa-sb;});}
 function applyDuty(nd,ds,key,names){const dd={...(nd[ds]||{})};return{...nd,[ds]:syncDutyToMembers(dd,key,names,state.members)};}
+
+// 事務所番・金庫番・掃除のうち、当日「同一人物」ルールが適用される担当キー一覧を返す
+// 土日祝：3つ全部 / 平日：金庫番・掃除のみ（事務所番は対象外）
+function linkedDutyKeys(date){return isReq(date)?['__office__','__safe__','__clean__']:['__safe__','__clean__'];}
+
+// 担当欄モーダル側：keyに設定したnamesを、連動グループの全キーに反映する
+function applyLinkedDuty(nd,ds,key,names){
+  const keys=linkedDutyKeys(new Date(ds));
+  const targets=keys.includes(key)?keys:[key];
+  let d=nd;
+  targets.forEach(k=>{d=applyDuty(d,ds,k,names);});
+  return d;
+}
+
+// メンバー別ボトムパネル側：nameの当番チェック状態(checkedLabels)から連動グループを更新する。
+// どれか1つでもチェックされていればグループ全体を[name]に、どれもチェックされていなければグループから除外する。
+// 戻り値affectedは、担当欄の中身が変わった可能性のあるメンバー名（DOM直更新の対象）。
+function applyLinkedDutyForMember(nd,ds,name,checkedLabels){
+  const keys=linkedDutyKeys(new Date(ds));
+  const anyChecked=keys.some(k=>checkedLabels.has(DUTY_STATUS_MAP[k]));
+  const affected=new Set([name]);
+  let d=nd;
+  keys.forEach(k=>{
+    const before=getDutyArr(d,ds,k);
+    const after=anyChecked?[name]:before.filter(n=>n!==name);
+    if(JSON.stringify(before)!==JSON.stringify(after)){
+      before.forEach(n=>affected.add(n));
+      after.forEach(n=>affected.add(n));
+      d=applyDuty(d,ds,k,after);
+    }
+  });
+  return{data:d,affected:[...affected]};
+}
 
 /**
  * 自動振り分けロジック（改訂版）
@@ -467,7 +501,7 @@ function txt(t){return document.createTextNode(t);}
 function render(){const app=document.getElementById('app');app.innerHTML='';app.appendChild(buildApp());}
 
 function buildApp(){
-  const {tab,editMode,showMembers,showSettings,activeAction,showToday,modal,showAssign,bottomPanel}=state;
+  const {tab,editMode,showMembers,showSettings,activeAction,modal,showAssign,bottomPanel}=state;
   const ds=days();const mm=mainMembers();const sm=subMembers();
   const misOfc=ds.filter(d=>isReq(d)&&!getDutyNames(toDS(d),'__office__').length).length;
   const misSafe=ds.filter(d=>!getDutyNames(toDS(d),'__safe__').length).length;
@@ -482,15 +516,13 @@ function buildApp(){
     boxShadow:'0 4px 12px rgba(0,0,0,0.15)',whiteSpace:'nowrap',
     letterSpacing:'0.01em',
   }},['保存しました']));;
-  const hasBPanel=bottomPanel&&tab==='shift'&&editMode==='edit'&&!showToday;
+  const hasBPanel=bottomPanel&&tab==='shift'&&editMode==='edit';
   const content=div({flex:'1',paddingBottom:hasBPanel?'196px':'68px',overflowY:'auto',WebkitOverflowScrolling:'touch'});
-  if((showMembers||activeAction==='member')&&tab==='shift'&&!showToday)content.appendChild(buildMemberEditor());
-  if(state.swapMode&&tab==='shift'&&!showToday)content.appendChild(buildSwapBanner());
-  if(showToday)content.appendChild(buildTodayDashboard());
-  else if(showSettings)content.appendChild(buildSettingsPanel());
+  if((showMembers||activeAction==='member')&&tab==='shift')content.appendChild(buildMemberEditor());
+  if(state.swapMode&&tab==='shift')content.appendChild(buildSwapBanner());
+  if(showSettings)content.appendChild(buildSettingsPanel());
   else if(tab==='shift')content.appendChild(buildShiftTab(ds,mm,sm));
   else if(tab==='summary')content.appendChild(buildSummaryTab(ds));
-  else if(tab==='personal')content.appendChild(buildPersonalTab(ds));
   root.appendChild(content);
   root.appendChild(buildBottomNav());
   if(hasBPanel)root.appendChild(buildBottomPanel(bottomPanel));
@@ -515,7 +547,7 @@ function buildHeader(misOfc,misSafe,misClean){
   top.appendChild(div({fontSize:'14px',fontWeight:'700',color:'#4f46e5',
     letterSpacing:'-0.02em',flexShrink:'0'},['SHIFT']));
 
-  if(tab==='shift'||tab==='summary'||tab==='personal'){
+  if(tab==='shift'||tab==='summary'){
     const nav=div({display:'flex',alignItems:'center',gap:'6px',flex:'1',justifyContent:'center'});
     const navBtn=(lbl,cb)=>btn({
       background:'#f8f9fa',border:'1px solid #e2e8f0',color:'#64748b',
@@ -696,7 +728,7 @@ function buildSettingsPanel(){
 
 // ── BOTTOM NAV
 function buildBottomNav(){
-  const {tab,showSettings,showToday}=state;
+  const {tab,showSettings}=state;
   const nav=div({
     position:'fixed',bottom:'0',left:'0',right:'0',
     background:'#fff',borderTop:'1px solid #e2e8f0',
@@ -706,22 +738,16 @@ function buildBottomNav(){
   });
 
   const navItems=[
-    {key:'today', lbl:'今日', isActive:showToday,
-      onClick:()=>setState({showToday:!showToday,showSettings:false,showMembers:false})},
-    {key:'shift', lbl:'シフト', isActive:tab==='shift'&&!showSettings&&!showToday,
-      onClick:()=>setState({tab:'shift',showSettings:false,showMembers:false,showToday:false})},
-    {key:'summary',lbl:'集計', isActive:tab==='summary'&&!showSettings&&!showToday,
-      onClick:()=>setState({tab:'summary',showSettings:false,showMembers:false,showToday:false})},
-    {key:'personal',lbl:'個人', isActive:tab==='personal'&&!showSettings&&!showToday,
-      onClick:()=>setState({tab:'personal',showSettings:false,showMembers:false,showToday:false})},
+    {key:'shift', lbl:'シフト', isActive:tab==='shift'&&!showSettings,
+      onClick:()=>setState({tab:'shift',showSettings:false,showMembers:false})},
+    {key:'summary',lbl:'集計', isActive:tab==='summary'&&!showSettings,
+      onClick:()=>setState({tab:'summary',showSettings:false,showMembers:false})},
   ];
 
   // SVGアイコン定義
   const icons={
-    today:`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><circle cx="12" cy="16" r="1" fill="currentColor"/></svg>`,
     shift:`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>`,
     summary:`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>`,
-    personal:`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>`,
   };
 
   navItems.forEach(({key,lbl,isActive,onClick})=>{
@@ -818,29 +844,30 @@ function updateCellDisplay(ds,name,sts){
   const cell=document.querySelector('[data-cell="'+ds+'__'+name+'"]');
   if(!cell)return;
 
-  // displaySts を計算（夜間現場→現場、責任者除外）
-  const displaySts=sts.filter(s=>s!=='責任者').map(s=>s==='夜間現場'?'現場':s);
+  // 当番（事務所番・金庫番・掃除）は文字バッジではなく担当者カラーの塗りつぶしで表示する
+  const onDuty=DUTY_COLS.some(dc=>getDutyNames(ds,dc.key).includes(name));
+  // スケジュール系ラベルのみバッジ表示（夜間現場→現場、責任者除外、当番ラベルは除外）
+  const scheduleSts=sts.filter(s=>s!=='責任者'&&!DUTY_LABELS.includes(s)).map(s=>s==='夜間現場'?'現場':s);
 
-  // セルの背景色更新
-  const mem=state.members.find(m=>m.name===name);
-  const mc=mem?.category==='main'?getMemberColor(name):null;
+  const mc=getMemberColor(name);
   const isOpen=state.bottomPanel&&state.bottomPanel.member===name&&state.bottomPanel.dateStr===ds;
-  const ss=STATUS_STYLE[displaySts[0]];
+  const ss=STATUS_STYLE[scheduleSts[0]];
+  const defaultBg=onDuty?mc:(ss?ss.bg:'');
 
-  // 背景はisOpenのハイライト or ステータス色
+  // 背景はisOpenのハイライト or 当番カラー／ステータス色
   if(!isOpen){
-    cell.style.background=ss?ss.bg:'';
+    cell.style.background=defaultBg;
   }
+  cell.setAttribute('data-default-bg',defaultBg);
 
-  // バッジ部分だけ再構築
-  // 既存の inner div を探して置き換え
+  // バッジ部分だけ再構築（既存の inner div を探して置き換え）
   const existingInner=cell.querySelector('div');
   if(existingInner)existingInner.remove();
 
-  if(displaySts.length){
+  if(scheduleSts.length){
     const inner=document.createElement('div');
     inner.style.cssText='display:flex;flex-wrap:wrap;gap:1px;justify-content:center;';
-    displaySts.forEach(st=>{
+    scheduleSts.forEach(st=>{
       const s=STATUS_STYLE[st];
       const badge=document.createElement('span');
       badge.style.cssText='background:'+(s?.bg||'#eee')+';color:'+(s?.text||'#333')+';border:1px solid '+(s?.border||'#ccc')+';border-radius:3px;padding:0 2px;font-size:9px;font-weight:600;white-space:nowrap;display:block;line-height:1.6;';
@@ -881,8 +908,9 @@ function renderBtnRow(btnRow,ds,name,mc,showItems,localSts){
       const idx=localSts.indexOf(realSt);
       if(idx>=0)localSts.splice(idx,1);else localSts.push(realSt);
       refreshBtn(st,b);
-      commitMemberSilent(ds,name,[...localSts]);
-      updateCellDisplay(ds,name,[...localSts]);
+      const affected=commitMemberSilent(ds,name,[...localSts]);
+      // 事務所番・金庫番・掃除は連動するため、影響を受けた他メンバーのセルも更新する
+      affected.forEach(n=>updateCellDisplay(ds,n,getStatuses(ds,n)));
     });
     btnRow.appendChild(b);
   });
@@ -894,8 +922,8 @@ function renderBtnRow(btnRow,ds,name,mc,showItems,localSts){
   clearB.addEventListener('click',()=>{
     localSts.length=0;
     showItems.forEach(st=>{if(btnMap[st])refreshBtn(st,btnMap[st]);});
-    commitMemberSilent(ds,name,[]);
-    updateCellDisplay(ds,name,[]);
+    const affected=commitMemberSilent(ds,name,[]);
+    affected.forEach(n=>updateCellDisplay(ds,n,getStatuses(ds,n)));
   });
   btnRow.appendChild(clearB);
 }
@@ -1111,6 +1139,23 @@ function buildBottomPanel(panel){
 // ── SHIFT TABLE
 function buildShiftTab(ds,mm,sm){
   const wrap=div({overflow:'hidden'});
+
+  // 担当回数の偏り（開閉パネル）：集計タブに移動しなくてもここで確認できる
+  const balanceWrap=div({padding:'10px 12px 0'});
+  const toggleRow=div({
+    display:'flex',alignItems:'center',justifyContent:'space-between',
+    background:'#fff',border:'1px solid '+C.border,borderRadius:'10px',
+    padding:'10px 14px',cursor:'pointer',
+  });
+  toggleRow.appendChild(div({fontWeight:'700',fontSize:'13px',color:C.text},['📊 担当回数の偏り']));
+  toggleRow.appendChild(div({fontSize:'12px',color:C.accent,fontWeight:'700'},[state.showBalancePanel?'▲ 閉じる':'▶ 開く']));
+  toggleRow.addEventListener('click',()=>setState({showBalancePanel:!state.showBalancePanel}));
+  balanceWrap.appendChild(toggleRow);
+  if(state.showBalancePanel){
+    balanceWrap.appendChild(buildDutyBalanceChart(ds));
+  }
+  wrap.appendChild(balanceWrap);
+
   wrap.appendChild(buildTable(ds,mm,sm));
 
   // 月が変わったときだけスクロール位置を左端にリセット
@@ -1263,10 +1308,12 @@ function buildTable(ds,mm,sm){
     [...mm,...(sm.length?[null]:[]),...sm].forEach(m=>{
       if(m===null){tr.appendChild(mkTd({padding:'0',background:C.subBorder,border:'none'}));return;}
       const rawSts=getStatuses(dstr,m.name).filter(s=>s!=='責任者');
-      const displaySts=rawSts.map(s=>s==='夜間現場'?'現場':s);
-      const ss=STATUS_STYLE[displaySts[0]];
-      const mc=m.category==='main'?getMemberColor(m.name):null;
-      const defaultBg=ss?ss.bg:rowBg;
+      // 当番（事務所番・金庫番・掃除）はセル全体を担当者カラーで塗りつぶし、文字バッジは表示しない
+      const onDuty=DUTY_COLS.some(dc2=>getDutyNames(dstr,dc2.key).includes(m.name));
+      const scheduleSts=rawSts.filter(s=>!DUTY_LABELS.includes(s)).map(s=>s==='夜間現場'?'現場':s);
+      const ss=STATUS_STYLE[scheduleSts[0]];
+      const mc=getMemberColor(m.name);
+      const defaultBg=onDuty?mc:(ss?ss.bg:rowBg);
       const mtd=mkTd({
         background:defaultBg,
         cursor:editMode==='edit'?'pointer':'default',
@@ -1276,9 +1323,9 @@ function buildTable(ds,mm,sm){
       mtd.setAttribute('data-cell',dstr+'__'+m.name);
       mtd.setAttribute('data-default-bg',defaultBg);
       if(editMode==='edit')mtd.addEventListener('click',()=>openMemberModal(dstr,m.name));
-      if(displaySts.length){
+      if(scheduleSts.length){
         const inner=div({display:'flex',flexWrap:'wrap',gap:'1px',justifyContent:'center'});
-        displaySts.forEach(st=>{
+        scheduleSts.forEach(st=>{
           const s=STATUS_STYLE[st];
           inner.appendChild(el('span',{style:{background:s?.bg||'#eee',color:s?.text||'#333',border:'1px solid '+(s?.border||'#ccc'),borderRadius:'3px',padding:'0 2px',fontSize:'9px',fontWeight:'600',whiteSpace:'nowrap',display:'block',lineHeight:'1.6'}},[st]));
         });
@@ -1551,7 +1598,7 @@ function buildAssignModal(){
 
 
 // ── MODALS
-function openDutyModal(ds,key){setState({modal:{kind:'duty',dateStr:ds,dutyKey:key},tempDuty:getDutyNames(ds,key)});}
+function openDutyModal(ds,key){setState({modal:{kind:'duty',dateStr:ds,dutyKey:key}});}
 function openMemberModal(ds,name){
   const isSame=state.bottomPanel&&state.bottomPanel.member===name&&state.bottomPanel.dateStr===ds;
   if(isSame){clearAllCellHighlight();setState({bottomPanel:null});return;}
@@ -1633,12 +1680,9 @@ function updateTableHighlight(ds,name,mc){
 }
 
 function buildModal(){
-  const{modal,copyMode}=state;
-  const{ov,sheet}=buildSheet(()=>setState({modal:null,copyMode:false,copyStatus:null,copyDays:new Set()}));
-  if(modal.kind==='duty')sheet.appendChild(buildDutyModalContent());
-  else if(copyMode)sheet.appendChild(buildCopyModeContent());
-  else sheet.appendChild(buildMemberModalContent());
-  sheet.appendChild(btn({width:'100%',marginTop:'10px',background:'#f1f5f9',border:'none',color:'#64748b',borderRadius:'12px',padding:'14px',fontSize:'13px',minHeight:'52px'},()=>{if(copyMode)setState({copyMode:false,copyStatus:null,copyDays:new Set(),modal:null});else setState({modal:null});},copyMode?'複製モードを終了':'キャンセル'));
+  const{ov,sheet}=buildSheet(()=>setState({modal:null}));
+  sheet.appendChild(buildDutyModalContent());
+  sheet.appendChild(btn({width:'100%',marginTop:'10px',background:'#f1f5f9',border:'none',color:'#64748b',borderRadius:'12px',padding:'14px',fontSize:'13px',minHeight:'52px'},()=>setState({modal:null}),'キャンセル'));
   return ov;
 }
 
@@ -1651,8 +1695,10 @@ function buildDutyModalContent(){
   const localDuty=[...getDutyNames(modal.dateStr,modal.dutyKey)];
   const btnRefs={};
 
+  const linkedLabels=linkedDutyKeys(new Date(modal.dateStr)).map(k=>DUTY_STATUS_MAP[k]).join('・');
   wrap.appendChild(div({fontWeight:'700',fontSize:'15px',color:'#1e293b',marginBottom:'2px'},[dc.label+' 担当者']));
-  wrap.appendChild(div({color:C.muted,fontSize:'12px',marginBottom:'14px'},[modal.dateStr+' ／ 複数選択可']));
+  wrap.appendChild(div({color:C.muted,fontSize:'12px',marginBottom:'4px'},[modal.dateStr+' ／ 複数選択可']));
+  wrap.appendChild(div({color:C.accent,fontSize:'11px',fontWeight:'600',marginBottom:'14px'},['※'+linkedLabels+'は同じ担当者になります']));
 
   function refreshDutyBtn(name,b){
     const mc=state.members.find(m=>m.name===name)?.category==='main'?getMemberColor(name):C.muted;
@@ -1804,10 +1850,9 @@ function buildDutyModalContent(){
     if(!selectedPerson||!selectedDates.size)return;
     let d={...state.data};
     selectedDates.forEach(ds=>{
-      const dd={...(d[ds]||{})};
       const cur=getDutyArr(d,ds,modal.dutyKey);
       const next=cur.includes(selectedPerson)?cur:[...cur,selectedPerson];
-      d={...d,[ds]:syncDutyToMembers({...dd},modal.dutyKey,next,state.members)};
+      d=applyLinkedDuty(d,ds,modal.dutyKey,next);
     });
     setState({data:d,modal:null},true);
   });
@@ -1817,348 +1862,6 @@ function buildDutyModalContent(){
   wrap.appendChild(multiSection);
   return wrap;
 }
-
-
-function buildMemberModalContent(){
-  const{modal}=state;
-  const wrap=div({});
-  wrap.appendChild(div({fontWeight:'700',fontSize:'15px',color:'#1e293b',marginBottom:'2px'},[modal.member]));
-  wrap.appendChild(div({color:C.muted,fontSize:'12px',marginBottom:'8px'},[modal.dateStr]));
-  wrap.appendChild(div({color:'#92400e',fontSize:'12px',background:'#fffbeb',borderRadius:'8px',
-    padding:'8px 10px',border:'1px solid #fde68a',marginBottom:'14px'},['長押しで複製モード']));
-
-  // ローカルステータス管理（再描画なし）
-  const localStatus=[...state.tempStatus];
-
-  const grid=div({display:'grid',gridTemplateColumns:'1fr 1fr',gap:'8px',marginBottom:'14px'});
-  const btns={};
-
-  STATUS_LIST.forEach(st=>{
-    const ss=STATUS_STYLE[st];
-    const b=document.createElement('button');
-    Object.assign(b.style,{
-      background:'#f8f9fa',border:'1.5px solid #e2e8f0',color:'#64748b',
-      borderRadius:'10px',padding:'14px 8px',fontSize:'13px',fontWeight:'400',
-      userSelect:'none',WebkitUserSelect:'none',position:'relative',
-      minHeight:'52px',cursor:'pointer',fontFamily:'inherit',width:'100%',
-    });
-    b.textContent=st;
-    btns[st]=b;
-
-    function refreshBtn(){
-      const active=localStatus.includes(st);
-      b.style.background=active?ss.bg:'#f8f9fa';
-      b.style.border='1.5px solid '+(active?ss.border:'#e2e8f0');
-      b.style.color=active?ss.text:'#64748b';
-      b.style.fontWeight=active?'600':'400';
-      b.textContent=(active?'✓ ':'')+st;
-    }
-    refreshBtn();
-
-    // タップでDOMダイレクト更新
-    b.addEventListener('click',()=>{
-      const idx=localStatus.indexOf(st);
-      if(idx>=0)localStatus.splice(idx,1);
-      else localStatus.push(st);
-      refreshBtn();
-      applyBtn.style.background=C.accent;
-    });
-
-    // 長押しで複製モード
-    let lp=null;
-    const startLP=(e)=>{lp=setTimeout(()=>{lp=null;if(e.cancelable)e.preventDefault();
-      state.tempStatus=[...localStatus];
-      setState({copyMode:true,copyStatus:st,copyDays:new Set()});},600);};
-    const endLP=()=>{clearTimeout(lp);lp=null;};
-    b.addEventListener('mousedown',startLP);b.addEventListener('mouseup',endLP);b.addEventListener('mouseleave',endLP);
-    b.addEventListener('touchstart',startLP,{passive:true});b.addEventListener('touchend',endLP);
-    grid.appendChild(b);
-  });
-  wrap.appendChild(grid);
-
-  const row=div({display:'flex',gap:'8px'});
-
-  // クリアボタン
-  row.appendChild(btn({flex:'1',background:'#f1f5f9',border:'none',color:'#64748b',
-    borderRadius:'10px',padding:'14px',fontSize:'13px',minHeight:'52px'},()=>{
-    localStatus.length=0;
-    STATUS_LIST.forEach(st=>btns[st]&&(()=>{
-      const b=btns[st];const ss=STATUS_STYLE[st];
-      b.style.background='#f8f9fa';b.style.border='1.5px solid #e2e8f0';
-      b.style.color='#64748b';b.style.fontWeight='400';b.textContent=st;
-    })());
-  },'クリア'));
-
-  // 確定ボタン
-  const applyBtn=document.createElement('button');
-  Object.assign(applyBtn.style,{flex:'2',background:C.accent,color:'#fff',border:'none',
-    borderRadius:'10px',padding:'14px',fontSize:'14px',fontWeight:'600',
-    minHeight:'52px',cursor:'pointer',fontFamily:'inherit'});
-  applyBtn.textContent='確定';
-  applyBtn.addEventListener('click',()=>{
-    commitMember(modal.dateStr,modal.member,[...localStatus]);
-    setState({modal:null});
-  });
-  row.appendChild(applyBtn);
-  wrap.appendChild(row);return wrap;
-}
-
-
-function buildCopyModeContent(){
-  const{modal,copyStatus}=state;
-  const ss=STATUS_STYLE[copyStatus];
-  const wrap=div({});
-
-  // ヘッダー
-  const hdr=div({display:'flex',alignItems:'center',gap:'8px',marginBottom:'8px'});
-  hdr.appendChild(div({background:ss?.bg||C.aLight,color:ss?.text||C.accent,border:'2px solid '+(ss?.border||C.aLight),borderRadius:'8px',padding:'5px 14px',fontWeight:'700',fontSize:'14px'},['📋 '+copyStatus]));
-  hdr.appendChild(div({fontWeight:'700',fontSize:'14px',color:C.text},['を複製']));
-  wrap.appendChild(hdr);
-  wrap.appendChild(div({fontSize:'12px',color:C.muted,marginBottom:'8px'},['対象：'+modal.member]));
-  wrap.appendChild(div({background:'#fdf3dc',border:'1px solid #d4a843',borderRadius:'8px',padding:'8px 10px',fontSize:'12px',color:'#7d5a0a',marginBottom:'12px'},['📅 適用したい日付をタップして選択。']));
-
-  // 選択状態はローカル変数で管理（再描画なし）
-  const localSelected=new Set(state.copyDays);
-
-  // カウント表示・ボタンを先に参照できるよう前方宣言
-  let countEl,applyBtn;
-
-  function updateUI(){
-    const sz=localSelected.size;
-    if(countEl){
-      countEl.textContent=sz>0?sz+'日を選択中':'日付を選んでください';
-      countEl.style.color=sz>0?(ss?.text||C.accent):C.muted;
-      countEl.style.fontWeight=sz>0?'700':'400';
-    }
-    if(applyBtn){
-      applyBtn.textContent=sz>0?sz+'日に適用':'日付を選択';
-      applyBtn.style.background=sz>0?C.accent:'#ddd';
-      applyBtn.style.cursor=sz>0?'pointer':'not-allowed';
-    }
-  }
-
-  // 日付グリッド
-  const grid=div({display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:'4px',maxHeight:'260px',overflowY:'auto',marginBottom:'12px'});
-  days().forEach(d=>{
-    const ds=toDS(d);
-    const dc2=dayClr(d);
-    const isWH=isWk(d)||isHol(d);
-
-    function getBg(sel){return sel?(ss?.bg||C.aLight):isWH?C.wkBg:'#fafafa';}
-    function getBorder(sel){return '2px solid '+(sel?(ss?.border||C.accent):C.border);}
-    function getColor(sel){return sel?(ss?.text||C.accent):dc2;}
-
-    const b=document.createElement('button');
-    const sel0=localSelected.has(ds);
-    Object.assign(b.style,{
-      background:getBg(sel0),border:getBorder(sel0),borderRadius:'8px',
-      padding:'8px 2px',fontSize:'12px',fontWeight:sel0?'700':'400',
-      color:getColor(sel0),lineHeight:'1.3',minHeight:'50px',
-      display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
-      width:'100%',cursor:'pointer',fontFamily:'inherit',
-    });
-    const dateDiv=document.createElement('div');
-    dateDiv.textContent=(d.getMonth()+1)+'/'+d.getDate();
-    const dayDiv=document.createElement('div');
-    dayDiv.style.fontSize='10px';
-    dayDiv.textContent=dayLbl(d);
-    const checkDiv=document.createElement('div');
-    checkDiv.style.fontSize='9px';
-    checkDiv.textContent='✓';
-    checkDiv.style.display=sel0?'':'none';
-    b.appendChild(dateDiv);b.appendChild(dayDiv);b.appendChild(checkDiv);
-
-    b.addEventListener('click',()=>{
-      const nowSel=localSelected.has(ds);
-      nowSel?localSelected.delete(ds):localSelected.add(ds);
-      const nextSel=localSelected.has(ds);
-      // ボタンのみ直接更新（再描画なし）
-      b.style.background=getBg(nextSel);
-      b.style.border=getBorder(nextSel);
-      b.style.color=getColor(nextSel);
-      b.style.fontWeight=nextSel?'700':'400';
-      checkDiv.style.display=nextSel?'':'none';
-      // カウント・適用ボタン更新
-      updateUI();
-    });
-    grid.appendChild(b);
-  });
-  wrap.appendChild(grid);
-
-  // カウント表示
-  countEl=div({textAlign:'center',fontSize:'13px',marginBottom:'12px',color:C.muted,fontWeight:'400'},['日付を選んでください']);
-  wrap.appendChild(countEl);
-
-  // ボタン行
-  const row=div({display:'flex',gap:'8px'});
-
-  // すべて解除
-  row.appendChild(btn({flex:'1',background:'#f1f5f9',border:'none',color:'#64748b',borderRadius:'10px',padding:'14px',fontSize:'12px',minHeight:'52px'},()=>{
-    localSelected.clear();
-    // 全ボタンの選択状態をリセット
-    grid.querySelectorAll('button').forEach((b2,i)=>{
-      const d2=days()[i];const ds2=toDS(d2);const isWH2=isWk(d2)||isHol(d2);
-      b2.style.background=isWH2?C.wkBg:'#fafafa';
-      b2.style.border='2px solid '+C.border;
-      b2.style.color=dayClr(d2);b2.style.fontWeight='400';
-      b2.querySelector('div:last-child').style.display='none';
-    });
-    updateUI();
-  },'すべて解除'));
-
-  // 適用ボタン
-  applyBtn=document.createElement('button');
-  Object.assign(applyBtn.style,{flex:'2',background:'#ddd',color:'#fff',border:'none',borderRadius:'10px',padding:'14px',fontSize:'13px',fontWeight:'700',minHeight:'52px',cursor:'not-allowed',fontFamily:'inherit'});
-  applyBtn.textContent='日付を選択';
-  applyBtn.addEventListener('click',()=>{
-    if(!localSelected.size)return;
-    const member=modal.member;let d={...state.data};
-    localSelected.forEach(ds=>{
-      const cur=Array.isArray(d[ds]?.[member])?d[ds][member]:(d[ds]?.[member]?[d[ds][member]]:[]);
-      const next=cur.includes(copyStatus)?cur:[...cur,copyStatus];
-      const dd={...(d[ds]||{})};
-      const synced=syncMemberToDuty({...dd,[member]:next},member,next);
-      d={...d,[ds]:synced};
-    });
-    // stateを更新してモーダルを閉じる
-    state.copyDays=new Set();
-    setState({data:d,copyMode:false,copyStatus:null,copyDays:new Set(),modal:null},true);
-  });
-  row.appendChild(applyBtn);
-  wrap.appendChild(row);
-  updateUI();
-  return wrap;
-}
-
-
-// ============================================================
-// 📅 今日のダッシュボード
-// ============================================================
-function buildTodayDashboard(){
-  const wrap=div({padding:'16px 14px 80px',maxWidth:'500px',margin:'0 auto'});
-  const todayDate=new Date();
-  const ds=TODAY_DS;
-  const w=todayDate.getDay();
-  const isWH=isWk(todayDate)||isHol(todayDate);
-  const dc=dayClr(todayDate);
-
-  // ── 日付ヘッダー ──
-  const dateHdr=div({background:'#4f46e5',borderRadius:'12px',padding:'20px',marginBottom:'16px',color:'#fff',textAlign:'center'});
-  dateHdr.appendChild(div({fontSize:'13px',opacity:'0.85',marginBottom:'4px'},['今日の担当']));
-  dateHdr.appendChild(div({fontSize:'28px',fontWeight:'700',marginBottom:'4px'},
-    [(todayDate.getMonth()+1)+'月'+todayDate.getDate()+'日（'+dayLbl(todayDate)+'）'+(isHol(todayDate)?'祝':'')+' ']));
-  dateHdr.appendChild(div({fontSize:'13px',opacity:'0.8'},[isWH?'🔴 土日祝':'🟢 平日']));
-  wrap.appendChild(dateHdr);
-
-  // ── 担当者カード ──
-  const dutyToShow=isWH
-    ? DUTY_COLS // 土日祝は全列
-    : DUTY_COLS.filter(dc=>dc.key!=='__office__'); // 平日は金庫番・掃除のみ
-
-  const hasDuty=dutyToShow.some(dc=>getDutyNames(ds,dc.key).length>0);
-
-  if(!hasDuty){
-    wrap.appendChild(div({background:'#fff',border:'1px solid '+C.border,borderRadius:'14px',padding:'24px',textAlign:'center',color:C.muted,fontSize:'14px'},['本日の担当はまだ設定されていません']));
-  } else {
-    dutyToShow.forEach(dc2=>{
-      const names=getDutyNames(ds,dc2.key);
-      if(!names.length)return;
-      const card=div({background:'#fff',border:'2px solid '+dc2.accent,borderRadius:'14px',padding:'14px 16px',marginBottom:'10px',display:'flex',alignItems:'center',gap:'12px'});
-      const badge=div({background:dc2.lightBg,color:dc2.accent,borderRadius:'8px',padding:'6px 10px',fontWeight:'700',fontSize:'12px',flexShrink:'0',textAlign:'center',minWidth:'64px'});
-      badge.appendChild(txt(dc2.label));
-      card.appendChild(badge);
-      const nameWrap=div({display:'flex',flexWrap:'wrap',gap:'6px',flex:'1'});
-      names.forEach(n=>{
-        const nb=div({background:dc2.accent,color:'#fff',borderRadius:'20px',padding:'6px 14px',fontSize:'14px',fontWeight:'700'});
-        nb.appendChild(txt(n));nameWrap.appendChild(nb);
-      });
-      card.appendChild(nameWrap);
-      wrap.appendChild(card);
-    });
-  }
-
-  // ── メンバーの状態 ──
-  wrap.appendChild(div({fontWeight:'700',fontSize:'13px',color:C.text,margin:'16px 0 8px'},['👥 本日のメンバー状態']));
-  const memGrid=div({display:'grid',gridTemplateColumns:'1fr 1fr',gap:'8px'});
-  state.members.forEach(m=>{
-    const sts=getStatuses(ds,m.name).filter(s=>!['事務所番','金庫番','掃除','責任者'].includes(s)).map(s=>s==='夜間現場'?'現場':s);
-    const isDuty=DUTY_COLS.some(dc2=>getDutyNames(ds,dc2.key).includes(m.name));
-    const card=div({background:'#fff',border:'1px solid '+C.border,borderRadius:'10px',padding:'10px 12px',display:'flex',alignItems:'center',gap:'8px'});
-    const dot=div({width:'8px',height:'8px',borderRadius:'50%',flexShrink:'0',
-      background:sts.some(s=>['公休','有休','午前半休','午後半休'].includes(s))?'#fca5a5':isDuty?'#4f46e5':'#6abf99'});
-    card.appendChild(dot);
-    card.appendChild(div({fontWeight:'600',fontSize:'13px',flex:'1'},[m.name]));
-    if(sts.length){
-      const ss=STATUS_STYLE[sts[0]];
-      card.appendChild(div({background:ss?.bg,color:ss?.text,fontSize:'10px',fontWeight:'700',borderRadius:'4px',padding:'2px 6px',border:'1px solid '+(ss?.border||C.border)},[sts[0]]));
-    } else if(isDuty){
-      const dcName=DUTY_COLS.find(dc2=>getDutyNames(ds,dc2.key).includes(m.name));
-      if(dcName)card.appendChild(div({background:dcName.lightBg,color:dcName.accent,fontSize:'10px',fontWeight:'700',borderRadius:'4px',padding:'2px 6px'},[dcName.label]));
-    }
-    memGrid.appendChild(card);
-  });
-  wrap.appendChild(memGrid);
-
-  // ── 前月データコピーボタン ──
-  wrap.appendChild(div({fontWeight:'700',fontSize:'13px',color:C.text,margin:'20px 0 8px'},['📋 前月データのコピー']));
-  const prevM=state.month===1?12:state.month-1;
-  const prevY=state.month===1?state.year-1:state.year;
-  const copyCard=div({background:'#fff',border:'1px solid '+C.border,borderRadius:'12px',padding:'14px'});
-  copyCard.appendChild(div({fontSize:'12px',color:C.muted,marginBottom:'10px'},[prevY+'年'+prevM+'月の休暇設定（公休・有休・半休）を'+state.year+'年'+state.month+'月にコピーします']));
-  copyCard.appendChild(btn({width:'100%',background:C.accent,color:'#fff',border:'none',borderRadius:'10px',padding:'12px',fontSize:'13px',fontWeight:'700'},()=>copyPrevMonthData(),'📋 前月の休暇設定をコピー'));
-  wrap.appendChild(copyCard);
-
-  return wrap;
-}
-
-// ============================================================
-// 📋 前月データコピー
-// ============================================================
-function copyPrevMonthData(){
-  const prevM=state.month===1?12:state.month-1;
-  const prevY=state.month===1?state.year-1:state.year;
-  const prevDays=getMonthDays(prevY,prevM);
-  const currDays=getMonthDays(state.year,state.month);
-  const LEAVE_STS=['公休','有休','午前半休','午後半休'];
-
-  // 前月の日付→曜日マップ
-  const prevByDow={};
-  prevDays.forEach(d=>{
-    const key=d.getDay()+'_'+d.getDate();
-    const ds=toDS(d);
-    state.members.forEach(m=>{
-      const sts=(state.data[ds]?.[m.name]||[]).filter(s=>LEAVE_STS.includes(s));
-      if(sts.length){
-        if(!prevByDow[m.name])prevByDow[m.name]=[];
-        prevByDow[m.name].push({dow:d.getDay(),date:d.getDate(),sts});
-      }
-    });
-  });
-
-  // 同じ曜日・日付に近いものをコピー（単純に同じ週番号・曜日でマッチング）
-  const nd={...state.data};
-  let copied=0;
-  currDays.forEach(d=>{
-    const ds=toDS(d);
-    state.members.forEach(m=>{
-      if(!prevByDow[m.name])return;
-      // 同じ曜日で同じ週(1-5)のエントリを探す
-      const week=Math.ceil(d.getDate()/7);
-      const match=prevByDow[m.name].find(p=>p.dow===d.getDay()&&Math.ceil(p.date/7)===week);
-      if(match){
-        const dd={...(nd[ds]||{})};
-        const cur=Array.isArray(dd[m.name])?dd[m.name]:(dd[m.name]?[dd[m.name]]:[]);
-        const newSts=[...new Set([...cur,...match.sts])];
-        nd[ds]=syncMemberToDuty({...dd,[m.name]:newSts},m.name,newSts);
-        copied++;
-      }
-    });
-  });
-
-  setState({data:nd},true);
-  alert('✅ 前月の休暇設定をコピーしました！\n'+copied+'件の設定を引き継ぎました。\nシフトタブで確認してください。');
-}
-
 
 
 // ============================================================
@@ -2527,45 +2230,6 @@ function buildSummaryTab(ds){
   absSection.appendChild(absGrid);wrap.appendChild(absSection);return wrap;
 }
 
-// ── PERSONAL TAB
-function buildPersonalTab(ds){
-  const{personalMember}=state;
-  const wrap=div({padding:'12px 12px 40px',maxWidth:'500px',margin:'0 auto'});
-  wrap.appendChild(div({fontSize:'16px',fontWeight:'700',color:'#1e293b',marginBottom:'4px'},['個人ビュー']));
-  wrap.appendChild(div({fontSize:'12px',color:C.muted,marginBottom:'14px'},['メンバーを選んで担当日を確認']));
-  const selWrap=div({display:'flex',flexWrap:'wrap',gap:'8px',marginBottom:'16px'});
-  state.members.forEach(m=>{const active=personalMember===m.name;const cat=m.category==='main'?C.mainCat:C.subCat;const catBg=m.category==='main'?C.mainBg:C.subBg;selWrap.appendChild(btn({background:active?cat:catBg,color:active?'#fff':cat,border:'2px solid '+(active?cat:C.border),borderRadius:'20px',padding:'8px 16px',fontSize:'13px',fontWeight:active?'700':'500',minHeight:'42px'},()=>setState({personalMember:m.name}),m.name));});
-  wrap.appendChild(selWrap);
-  if(!personalMember){wrap.appendChild(div({textAlign:'center',color:C.muted,fontSize:'14px',padding:'40px 0'},['👆 上からメンバーを選んでください']));return wrap;}
-  const mem=state.members.find(m=>m.name===personalMember);const catColor=mem?.category==='main'?C.mainCat:C.subCat;
-  const summaryBar=div({background:'#fff',border:'1px solid '+C.border,borderRadius:'12px',padding:'14px',marginBottom:'16px'});
-  summaryBar.appendChild(div({fontWeight:'700',color:catColor,fontSize:'14px',marginBottom:'12px'},[personalMember+' さんの今月']));
-  const statRow=div({display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'8px',marginBottom:'10px'});
-  DUTY_COLS.forEach(dc=>{const cnt=ds.filter(d=>getDutyNames(toDS(d),dc.key).includes(personalMember)).length;const card=div({background:dc.lightBg,borderRadius:'8px',padding:'10px',textAlign:'center'});card.appendChild(div({fontSize:'22px',fontWeight:'700',color:dc.accent},[String(cnt)]));card.appendChild(div({fontSize:'10px',color:dc.accent,marginTop:'2px'},[dc.label]));statRow.appendChild(card);});
-  summaryBar.appendChild(statRow);
-  const statRow2=div({display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'6px'});
-  ['公休','有休','午前半休','午後半休'].forEach(st=>{const cnt=ds.filter(d=>getStatuses(toDS(d),personalMember).includes(st)).length;const ss=STATUS_STYLE[st];const card=div({background:cnt>0?ss.bg:'#f8f8f8',borderRadius:'8px',padding:'8px 4px',textAlign:'center',border:'1px solid '+(cnt>0?ss.border:C.border)});card.appendChild(div({fontSize:'18px',fontWeight:'700',color:cnt>0?ss.text:C.muted},[String(cnt)]));card.appendChild(div({fontSize:'9px',color:cnt>0?ss.text:C.muted,marginTop:'2px',lineHeight:'1.2'},[st]));statRow2.appendChild(card);});
-  summaryBar.appendChild(statRow2);wrap.appendChild(summaryBar);
-  wrap.appendChild(div({fontWeight:'700',color:C.text,fontSize:'13px',marginBottom:'10px'},['📅 担当・予定一覧']));
-  ds.forEach(d=>{
-    const dstr=toDS(d);const sts=getStatuses(dstr,personalMember);const dutyLabels=DUTY_COLS.filter(dc=>getDutyNames(dstr,dc.key).includes(personalMember));
-    if(!sts.length&&!dutyLabels.length)return;
-    const wkEnd=isWk(d)||isHol(d);
-    const row=div({display:'flex',alignItems:'flex-start',gap:'10px',padding:'12px',marginBottom:'8px',background:'#fff',borderRadius:'12px',border:'1px solid '+(wkEnd?C.strong:C.border),borderLeft:'4px solid '+(wkEnd?C.accent:C.border)});
-    const datePart=div({flexShrink:'0',width:'46px',textAlign:'center'});
-    datePart.appendChild(div({fontSize:'17px',fontWeight:'700',color:dayClr(d)},[(d.getMonth()+1)+'/'+d.getDate()]));
-    datePart.appendChild(div({fontSize:'12px',color:dayClr(d),fontWeight:'600'},[dayLbl(d)]));
-    if(isHol(d))datePart.appendChild(div({fontSize:'9px',color:C.sun},['祝']));
-    row.appendChild(datePart);
-    const badges=div({display:'flex',flexWrap:'wrap',gap:'5px',flex:'1',alignItems:'center'});
-    dutyLabels.forEach(dc=>{const b=div({background:dc.tag,color:'#fff',borderRadius:'6px',padding:'5px 10px',fontSize:'12px',fontWeight:'700'});b.appendChild(txt(dc.label));badges.appendChild(b);});
-    sts.filter(st=>!['事務所番','金庫番','掃除','責任者'].includes(st)).map(st=>st==='夜間現場'?'現場':st).forEach(st=>{const ss=STATUS_STYLE[st];const b=div({background:ss.bg,color:ss.text,border:'1px solid '+ss.border,borderRadius:'6px',padding:'5px 10px',fontSize:'12px',fontWeight:'600'});b.appendChild(txt(st));badges.appendChild(b);});
-    row.appendChild(badges);wrap.appendChild(row);
-  });
-  const hasAny=ds.some(d=>{const dstr=toDS(d);return getStatuses(dstr,personalMember).length>0||DUTY_COLS.some(dc=>getDutyNames(dstr,dc.key).includes(personalMember));});
-  if(!hasAny)wrap.appendChild(div({textAlign:'center',color:C.muted,fontSize:'14px',padding:'30px 0'},['この月の担当・予定はありません']));
-  return wrap;
-}
 
 // ============================================================
 // 起動
